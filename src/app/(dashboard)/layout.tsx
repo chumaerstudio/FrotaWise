@@ -3,110 +3,216 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-
-interface ItemNavegacao {
-  nome: string;
-  rota: string;
-  descricaoCurta: string;
-}
-
-const ITENS_MENU: ItemNavegacao[] = [
-  { nome: 'Painel Principal', rota: '/', descricaoCurta: 'Visão Geral & Alertas Remold' },
-  { nome: 'Estoque de Pneus', rota: '/pneus', descricaoCurta: 'Alocação, Fogo & Envio Remold' },
-  { nome: 'Malha de Pneus', rota: '/malha-pneus', descricaoCurta: 'Marcas, Aros & Limites de KM' },
-  { nome: 'Frota de Veículos', rota: '/veiculos', descricaoCurta: 'Caminhões & Mapa de Eixos' },
-  { nome: 'Custos e Multas', rota: '/custos-multas', descricaoCurta: 'Infrações & Reparos por KM' },
-];
+import {
+  LayoutDashboard,
+  Truck,
+  Disc,
+  Wrench,
+  Database,
+  Download,
+  Plus,
+  Sun,
+  Moon,
+  AlertTriangle,
+  CheckCircle2,
+} from 'lucide-react';
+import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
+import { APP_VERSION, LOGO_FROTAWISE } from '@/services/api';
+import { Btn, cx } from '@/components/ui';
+import { GlobalModals } from '@/components/forms/GlobalModals';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { usuario } = useAuth();
+  const {
+    company,
+    theme,
+    setTheme,
+    toast,
+    tireAlerts,
+    totalStockTires,
+    setShowVehicleModal,
+    setShowTireModal,
+    setShowMaintenanceModal,
+    handleExportBackup,
+  } = useEstoquePneus();
+
+  const navItems = [
+    {
+      href: '/',
+      label: 'Visão geral',
+      sub: 'Indicadores, despesas e ordens de ação da frota',
+      icon: LayoutDashboard,
+      badge: tireAlerts.length || null,
+    },
+    {
+      href: '/veiculos',
+      label: 'Frota de veículos',
+      sub: 'Cadastro e acompanhamento de cada equipamento',
+      icon: Truck,
+      badge: null,
+    },
+    {
+      href: '/pneus',
+      label: 'Pneus e estoque',
+      sub: 'Movimentação no chassi, almoxarifado e histórico',
+      icon: Disc,
+      badge: totalStockTires.length || null,
+    },
+    {
+      href: '/custos-multas',
+      label: 'Manutenções e multas',
+      sub: 'Despesas lançadas por veículo',
+      icon: Wrench,
+      badge: null,
+    },
+    {
+      href: '/malha-pneus',
+      label: 'Configurações e malha',
+      sub: 'Empresa, regras de alerta por modelo e cópia de segurança',
+      icon: Database,
+      badge: null,
+    },
+  ];
+
+  const activeNav = navItems.find((n) => n.href === pathname) || navItems[0];
 
   return (
-    <div className="min-h-screen flex bg-slate-100">
-      {/* Menu Lateral Fixo (Sidebar) */}
-      <aside className="w-72 bg-slate-900 text-white flex flex-col fixed inset-y-0 left-0 z-30 border-r border-slate-800">
-        <div className="px-6 py-5 border-b border-slate-800 flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-black text-base">
-            FW
-          </div>
-          <div>
-            <span className="text-lg font-extrabold tracking-tight block leading-none">
-              FrotaWise
-            </span>
-            <span className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider">
-              Enterprise Edition
-            </span>
-          </div>
+    <div className="ef ef-shell" data-theme={theme}>
+      {toast && (
+        <div
+          key={toast.k}
+          role="status"
+          className="ef-toast fixed bottom-5 right-5 ef-z60 px-4 py-3 rounded-xl flex items-center gap-3 ef-t13_5 font-medium text-white"
+          style={{
+            background: toast.type === 'error' ? '#8F2A22' : 'var(--pet)',
+            boxShadow: '0 12px 30px rgba(6,16,32,.35)',
+          }}
+        >
+          {toast.type === 'error' ? (
+            <AlertTriangle size={18} color="#F2B01E" />
+          ) : (
+            <CheckCircle2 size={18} color="#5BE0A6" />
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      <aside className="ef-side">
+        <div className="px-5 pt-6 pb-5" style={{ borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+          {company.logoUrl ? (
+            <div className="inline-flex rounded-xl bg-white p-2">
+              <img src={company.logoUrl} alt="Logo da empresa" className="h-11 w-auto object-contain" />
+            </div>
+          ) : (
+            <img
+              src={LOGO_FROTAWISE}
+              alt="FrotaWise"
+              draggable={false}
+              className="block h-auto ef-fade"
+              style={{ width: 184 }}
+            />
+          )}
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-          {ITENS_MENU.map((item) => {
-            const ativo = pathname === item.rota;
+        <nav className="ef-nav" aria-label="Navegação principal">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isOn = pathname === item.href;
             return (
               <Link
-                key={item.rota}
-                href={item.rota}
-                className={`block px-4 py-3 rounded-xl transition-all ${
-                  ativo
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
+                key={item.href}
+                href={item.href}
+                aria-current={isOn ? 'page' : undefined}
+                className={cx('nav', isOn && 'nav-on')}
               >
-                <div className="text-sm font-bold">{item.nome}</div>
-                <div className={`text-xs ${ativo ? 'text-blue-100' : 'text-slate-400'}`}>
-                  {item.descricaoCurta}
-                </div>
+                <span className="flex items-center gap-3">
+                  <Icon size={18} />
+                  {item.label}
+                </span>
+                {item.badge && (
+                  <span
+                    className="mono ef-t11 font-bold px-2 ef-py0_5 rounded-full"
+                    style={{ background: 'var(--brand)', color: '#06213F' }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 m-4 rounded-xl bg-slate-800/90 border border-slate-700 text-xs space-y-1">
-          <div className="text-slate-400 font-medium">Unidade Operacional Ativa</div>
-          <div className="font-bold text-white truncate">
-            {usuario?.tenant.nomeFantasia || 'TransLog Brasil S.A.'}
-          </div>
-          <div className="text-emerald-400 font-semibold">
-            ● Telemetria Online ({usuario?.tenant.frotaTotal || 420} caminhões)
+        <div className="ef-side-foot">
+          <button
+            onClick={handleExportBackup}
+            className="btn w-full"
+            style={{ background: 'rgba(255,255,255,.08)', color: '#fff' }}
+          >
+            <Download size={16} color="#18B389" />
+            Salvar backup no Pen Drive
+          </button>
+          <div className="ef-t11_5 mt-3 text-center" style={{ color: '#7F93B3' }}>
+            Versão {APP_VERSION} · {company.nomeEmpresa}
           </div>
         </div>
       </aside>
 
-      {/* Área Principal + Topo Fixo com Nome da Transportadora */}
-      <div className="flex-1 pl-72 flex flex-col min-h-screen">
-        <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center space-x-4">
-            <span className="px-3 py-1 rounded-md bg-slate-900 text-white text-xs font-bold tracking-wider uppercase">
-              {usuario?.tenant.id || 'TRANSLOG-BR'}
-            </span>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                {usuario?.tenant.razaoSocial || 'TransLog Brasil S.A. Logística Integrada'}
-              </h2>
-              <p className="text-xs text-slate-500">
-                CNPJ: {usuario?.tenant.cnpj || '14.892.301/0001-88'} • {usuario?.tenant.unidadesAtivas || 18} Filiais Conectadas
-              </p>
+      <div className="ef-main">
+        <header
+          className="px-6 py-4 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30"
+          style={{
+            background: 'var(--hdr)',
+            backdropFilter: 'blur(10px)',
+            borderBottom: '1px solid var(--line)',
+          }}
+        >
+          <span
+            aria-hidden
+            className="absolute left-0 right-0 pointer-events-none"
+            style={{
+              bottom: -1,
+              height: 2,
+              background: 'linear-gradient(90deg, var(--axle), var(--brand) 38%, transparent 72%)',
+              opacity: 0.75,
+            }}
+          />
+          <div>
+            <div className="flex items-center gap-2 ef-t12_5" style={{ color: 'var(--mute)' }}>
+              <span className="dot" />
+              <span>{company.nomeEmpresa} · Banco local ativo · 100% offline</span>
             </div>
+            <h1 className="ef-t22 font-semibold leading-tight">{activeNav.label}</h1>
           </div>
-
-          <div className="flex items-center space-x-6">
-            <div className="text-right">
-              <div className="text-sm font-bold text-slate-900">{usuario?.nome}</div>
-              <div className="text-xs text-slate-500">{usuario?.cargo.replace('_', ' ')}</div>
-            </div>
-            <Link
-              href="/login"
-              className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Trocar Conta
-            </Link>
+          <div className="flex items-center gap-2">
+            <Btn
+              icon={theme === 'dark' ? Sun : Moon}
+              title="Alternar tema claro/escuro"
+              aria-label="Alternar tema claro/escuro"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            />
+            <Btn icon={Plus} onClick={() => setShowVehicleModal(true)}>
+              Veículo
+            </Btn>
+            <Btn icon={Plus} onClick={() => setShowTireModal(true)}>
+              Pneu
+            </Btn>
+            <Btn v="dark" icon={Plus} onClick={() => setShowMaintenanceModal(true)}>
+              Despesa
+            </Btn>
           </div>
         </header>
 
-        <main className="p-8 flex-1">{children}</main>
+        <main className="p-6 flex-1">
+          <p className="ef-t13_5 mb-5" style={{ color: 'var(--ink2)' }}>
+            {activeNav.sub}
+          </p>
+          <div key={pathname} className="ef-rise">
+            {children}
+          </div>
+        </main>
       </div>
+
+      <GlobalModals />
     </div>
   );
 }

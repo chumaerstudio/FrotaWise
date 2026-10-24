@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { FrotaWiseProvider } from '@/hooks/useFrotaWiseStore';
 
 export const metadata: Metadata = {
-  title: 'FrotaWise Enterprise | Gestão Inteligente de Pneus e Frotas Pesadas',
-  description: 'Sistema corporativo para controle de CPK, malha de pneus, ciclos de remold e telemetria de frotas.',
+  title: 'FrotaWise Enterprise | Sistema de Gestão Logística e Pneus',
+  description: 'Gestão corporativa de frotas, movimentação de pneus no chassi, malha de modelos e despesas.',
 };
 
 export default function RootLayout({
@@ -13,8 +14,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased min-h-screen bg-slate-50 text-slate-900">
-        {children}
+      <body>
+        <FrotaWiseProvider>{children}</FrotaWiseProvider>
       </body>
     </html>
   );
