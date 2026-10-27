@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Database, Download, Upload, Settings, CheckCircle2, Plus } from 'lucide-react';
+import { Database, Download, Upload, Settings, CheckCircle2, Plus, Wrench } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
-import { APP_VERSION, SCHEMA_VERSION, formatNumber } from '@/services/api';
+import { APP_VERSION, CATEGORIAS_MANUTENCAO, SCHEMA_VERSION, formatNumber } from '@/services/api';
 import { findTireRule, normMedida, normTxt } from '@/services/pneusService';
 import { Btn, Chip, Empty, Field, SectionHead } from '@/components/ui';
-import { RegraModeloPneu } from '@/types/frotawise';
+import { RegraManutencaoPreventiva, RegraModeloPneu } from '@/types/frotawise';
 
 export default function MalhaPneusConfigPage() {
   const {
@@ -20,6 +20,8 @@ export default function MalhaPneusConfigPage() {
     setMaintenances,
     fines,
     setFines,
+    setFuelings,
+    preventiveList,
     showToast,
     handleExportBackup,
   } = useEstoquePneus();
@@ -27,6 +29,10 @@ export default function MalhaPneusConfigPage() {
   const emptyRule = { marca: '', medida: '', km1: '', km2: '', km3: '', kmSucata: '' };
   const [ruleForm, setRuleForm] = useState(emptyRule);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+
+  const emptyMRule = { modelo: '', categoria: '', peca: '', km: '' };
+  const [maintRuleForm, setMaintRuleForm] = useState(emptyMRule);
+  const [editingMaintRuleId, setEditingMaintRuleId] = useState<string | null>(null);
 
   const r = company.regrasPneus;
   const setRule = (k: 'kmEstocar' | 'kmRecapar' | 'kmSucatear', v: string) =>
@@ -44,6 +50,7 @@ export default function MalhaPneusConfigPage() {
         if (Array.isArray(p.tires)) setTires(p.tires);
         if (Array.isArray(p.maintenances)) setMaintenances(p.maintenances);
         if (Array.isArray(p.fines)) setFines(p.fines);
+        if (Array.isArray(p.fuelings)) setFuelings(p.fuelings);
         showToast('Backup restaurado com sucesso!');
       } catch {
         showToast('Arquivo inválido. Selecione um backup .json do FrotaWise.', 'error');
@@ -138,6 +145,71 @@ export default function MalhaPneusConfigPage() {
       setRuleForm(emptyRule);
     }
     showToast('Regra removida.');
+  };
+
+  const handleSaveMaintRule = (e: React.FormEvent) => {
+    e.preventDefault();
+    const peca = maintRuleForm.peca.trim();
+    const km = Math.round(Number(maintRuleForm.km));
+    if (!maintRuleForm.categoria || !peca || !(km > 0)) return;
+    const item: RegraManutencaoPreventiva = {
+      id: editingMaintRuleId || 'rm-' + Date.now(),
+      modelo: maintRuleForm.modelo || '',
+      categoria: maintRuleForm.categoria,
+      peca,
+      km,
+    };
+    const lista = company.regrasManutencao || [];
+    if (
+      lista.some(
+        (rg) =>
+          rg.id !== item.id &&
+          rg.categoria === item.categoria &&
+          normTxt(rg.peca) === normTxt(item.peca) &&
+          normTxt(rg.modelo) === normTxt(item.modelo)
+      )
+    ) {
+      showToast(
+        'Já existe um limite para este modelo, categoria e peça. Edite o existente.',
+        'error'
+      );
+      return;
+    }
+    setCompany((prev) => ({
+      ...prev,
+      regrasManutencao: editingMaintRuleId
+        ? (prev.regrasManutencao || []).map((rg) => (rg.id === editingMaintRuleId ? item : rg))
+        : [...(prev.regrasManutencao || []), item],
+    }));
+    showToast(
+      editingMaintRuleId
+        ? 'Limite atualizado!'
+        : 'Limite cadastrado! Os avisos de preventiva já usam esse KM.'
+    );
+    setMaintRuleForm(emptyMRule);
+    setEditingMaintRuleId(null);
+  };
+
+  const handleEditMaintRule = (rg: RegraManutencaoPreventiva) => {
+    setEditingMaintRuleId(rg.id);
+    setMaintRuleForm({
+      modelo: rg.modelo || '',
+      categoria: rg.categoria,
+      peca: rg.peca,
+      km: String(rg.km),
+    });
+  };
+
+  const handleRemoveMaintRule = (rg: RegraManutencaoPreventiva) => {
+    setCompany((prev) => ({
+      ...prev,
+      regrasManutencao: (prev.regrasManutencao || []).filter((x) => x.id !== rg.id),
+    }));
+    if (editingMaintRuleId === rg.id) {
+      setEditingMaintRuleId(null);
+      setMaintRuleForm(emptyMRule);
+    }
+    showToast('Limite removido.');
   };
 
   return (
@@ -380,6 +452,155 @@ export default function MalhaPneusConfigPage() {
                           Editar
                         </Btn>
                         <Btn sm onClick={() => handleRemoveRule(rg)}>
+                          Remover
+                        </Btn>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card ef-rise" style={{ animationDelay: '200ms' }}>
+        <SectionHead
+          title="Manutenção preventiva por categoria"
+          sub="Defina de quantos em quantos KM cada peça precisa de manutenção preventiva. Os avisos aparecem na Visão geral."
+        />
+        <datalist id="ef-pecas-cfg">
+          {[
+            ...new Set([
+              ...(company.regrasManutencao || []).map((rg) => rg.peca),
+              ...maintenances.map((m) => m.peca).filter(Boolean),
+            ]),
+          ].map((x) => (
+            <option key={x} value={x} />
+          ))}
+        </datalist>
+        <form onSubmit={handleSaveMaintRule} className="p-5 space-y-3">
+          <div className="ef-g-3">
+            <Field label="Modelo do veículo">
+              <select
+                className="inp"
+                value={maintRuleForm.modelo}
+                onChange={(e) => setMaintRuleForm({ ...maintRuleForm, modelo: e.target.value })}
+              >
+                <option value="">Todos os modelos</option>
+                {[
+                  ...new Set(
+                    [...vehicles.map((v) => v.modelo), maintRuleForm.modelo].filter(Boolean)
+                  ),
+                ].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Categoria da manutenção">
+              <select
+                required
+                className="inp"
+                value={maintRuleForm.categoria}
+                onChange={(e) => setMaintRuleForm({ ...maintRuleForm, categoria: e.target.value })}
+              >
+                <option value="">Selecione...</option>
+                {CATEGORIAS_MANUTENCAO.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Peça">
+              <input
+                required
+                list="ef-pecas-cfg"
+                className="inp"
+                placeholder="Ex: Pastilhas de freio"
+                value={maintRuleForm.peca}
+                onChange={(e) => setMaintRuleForm({ ...maintRuleForm, peca: e.target.value })}
+              />
+            </Field>
+            <Field label="Preventiva a cada (km)">
+              <input
+                type="number"
+                min="1"
+                required
+                className="inp mono"
+                value={maintRuleForm.km}
+                onChange={(e) => setMaintRuleForm({ ...maintRuleForm, km: e.target.value })}
+              />
+            </Field>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="ef-t12_5" style={{ color: 'var(--mute)' }}>
+              O limite vale para os veículos do modelo escolhido. O aviso conta a partir do KM da
+              última manutenção com a mesma categoria e peça. &quot;Próxima&quot; aparece quando
+              faltar 10% do intervalo (mínimo 500 km).
+            </span>
+            <div className="flex gap-2">
+              {editingMaintRuleId && (
+                <Btn
+                  type="button"
+                  onClick={() => {
+                    setEditingMaintRuleId(null);
+                    setMaintRuleForm(emptyMRule);
+                  }}
+                >
+                  Cancelar edição
+                </Btn>
+              )}
+              <Btn type="submit" v="primary" icon={editingMaintRuleId ? CheckCircle2 : Plus}>
+                {editingMaintRuleId ? 'Salvar alterações' : 'Adicionar limite'}
+              </Btn>
+            </div>
+          </div>
+        </form>
+        {(company.regrasManutencao || []).length === 0 ? (
+          <div style={{ borderTop: '1px solid var(--line)' }}>
+            <Empty
+              icon={Wrench}
+              title="Nenhum limite de preventiva"
+              text="Cadastre o primeiro limite acima para ativar os avisos na Visão geral."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto" style={{ borderTop: '1px solid var(--line)' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th>Categoria</th>
+                  <th>Peça</th>
+                  <th className="ef-tr">A cada</th>
+                  <th>Situação da frota</th>
+                  <th className="ef-tr">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {company.regrasManutencao.map((rg) => {
+                  const lista = preventiveList.filter((x) => x.r.id === rg.id);
+                  const venc = lista.filter((x) => x.status === 'vencida').length;
+                  const prox = lista.filter((x) => x.status === 'proxima').length;
+                  return (
+                    <tr key={rg.id}>
+                      <td>{rg.modelo || 'Todos os modelos'}</td>
+                      <td>{rg.categoria}</td>
+                      <td className="font-semibold">{rg.peca}</td>
+                      <td className="mono text-right">{formatNumber(rg.km)} km</td>
+                      <td className="ef-sx15">
+                        {venc > 0 && <Chip tone="red">{venc} vencida(s)</Chip>}
+                        {prox > 0 && <Chip tone="amber">{prox} próxima(s)</Chip>}
+                        {venc === 0 && prox === 0 && <Chip tone="teal">Em dia</Chip>}
+                      </td>
+                      <td className="text-right whitespace-nowrap ef-sx15">
+                        <Btn sm onClick={() => handleEditMaintRule(rg)}>
+                          Editar
+                        </Btn>
+                        <Btn sm onClick={() => handleRemoveMaintRule(rg)}>
                           Remover
                         </Btn>
                       </td>

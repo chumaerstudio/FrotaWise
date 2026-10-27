@@ -7,11 +7,14 @@ import {
   BANDAS_PNEU,
   CATEGORIAS_MANUTENCAO,
   NIC_MULTIPLICADOR,
+  TIPOS_COMBUSTIVEL,
   formatCurrency,
+  formatDec,
   formatNumber,
   today,
 } from '@/services/api';
 import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
+import { cmpFuel, computeFuelMedias } from '@/services/veiculosService';
 import {
   Btn,
   Chip,
@@ -24,7 +27,7 @@ import {
   SectionHead,
 } from '@/components/ui';
 import { useRouter } from 'next/navigation';
-import { StatusMulta, TipoManutencao } from '@/types/frotawise';
+import { StatusMulta, TipoCombustivel, TipoManutencao } from '@/types/frotawise';
 
 export const GlobalModals: React.FC = () => {
   const router = useRouter();
@@ -38,6 +41,8 @@ export const GlobalModals: React.FC = () => {
     setMaintenances,
     fines,
     setFines,
+    fuelings,
+    setFuelings,
     showToast,
     tireAlerts,
     selectedChassisVehicleId,
@@ -55,11 +60,14 @@ export const GlobalModals: React.FC = () => {
     setShowTireModal,
     showMaintenanceModal,
     setShowMaintenanceModal,
+    maintenancePrefill,
+    setMaintenancePrefill,
     showFineModal,
     setShowFineModal,
+    showFuelModal,
+    setShowFuelModal,
   } = useEstoquePneus();
 
-  // Estados do Modal de Operação de Pneu (Retirada / Montagem / Remold / Sucata / Somar KM)
   const [actionKmInput, setActionKmInput] = useState('');
   const [actionObsInput, setActionObsInput] = useState('');
   const [actionStockLocInput, setActionStockLocInput] = useState('Prateleira A-01');
@@ -78,7 +86,6 @@ export const GlobalModals: React.FC = () => {
     }
   }, [tireActionModal]);
 
-  // Estados de Cadastro de Veículo, Pneu, Manutenção e Multa
   const emptyVehicle = { placa: '', uf: 'SP', modelo: '', categoria: '', eixos: 3, kmAtual: '' };
   const [vehicleForm, setVehicleForm] = useState(emptyVehicle);
 
@@ -98,6 +105,7 @@ export const GlobalModals: React.FC = () => {
     veiculoId: '',
     tipo: 'Preventiva' as TipoManutencao,
     categoria: '',
+    peca: '',
     km: '',
     descricao: '',
     fornecedor: '',
@@ -105,6 +113,19 @@ export const GlobalModals: React.FC = () => {
     valor: '',
   });
   const [maintenanceForm, setMaintenanceForm] = useState(emptyMaint());
+
+  useEffect(() => {
+    if (showMaintenanceModal && maintenancePrefill) {
+      setMaintenanceForm((prev) => ({
+        ...prev,
+        veiculoId: maintenancePrefill.veiculoId ?? prev.veiculoId,
+        categoria: maintenancePrefill.categoria ?? prev.categoria,
+        peca: maintenancePrefill.peca ?? prev.peca,
+        tipo: maintenancePrefill.tipo ?? prev.tipo,
+      }));
+      setMaintenancePrefill(null);
+    }
+  }, [showMaintenanceModal, maintenancePrefill, setMaintenancePrefill]);
 
   const emptyFine = () => ({
     ait: '',
@@ -118,6 +139,17 @@ export const GlobalModals: React.FC = () => {
     valor: '',
   });
   const [fineForm, setFineForm] = useState(emptyFine());
+
+  const emptyFuel = () => ({
+    veiculoId: '',
+    tipo: 'Diesel' as TipoCombustivel,
+    data: today(),
+    litros: '',
+    valorUnit: '',
+    km: '',
+    fornecedor: '',
+  });
+  const [fuelForm, setFuelForm] = useState(emptyFuel());
 
   const handleConfirmTireOperation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,6 +354,7 @@ export const GlobalModals: React.FC = () => {
       veiculoId: maintenanceForm.veiculoId,
       tipo: maintenanceForm.tipo,
       categoria: maintenanceForm.categoria,
+      peca: (maintenanceForm.peca || '').trim(),
       km,
       descricao: maintenanceForm.descricao.trim(),
       fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
@@ -369,6 +402,116 @@ export const GlobalModals: React.FC = () => {
     showToast(msg);
   };
 
+  const checkFuelKm = (form: typeof fuelForm) => {
+    const veh = vehicles.find((v) => v.id === form.veiculoId);
+    const km = Math.round(Number(form.km));
+    if (!veh) return { erro: '', veh, km };
+    if (form.km === '' || !Number.isFinite(km) || km < 0)
+      return { erro: 'Informe a quilometragem do veículo neste abastecimento.', veh, km };
+    const date = form.data;
+    const serie = [
+      ...fuelings
+        .filter((f) => f.veiculoId === veh.id)
+        .map((f) => ({ data: f.data, km: Number(f.km), rotulo: `abastecimento de ${f.data}` })),
+      ...maintenances
+        .filter(
+          (m) =>
+            m.veiculoId === veh.id &&
+            m.km !== null &&
+            m.km !== undefined &&
+            Number.isFinite(Number(m.km))
+        )
+        .map((m) => ({
+          data: m.data,
+          km: Number(m.km),
+          rotulo: `manutenção ${m.osNumero} de ${m.data}`,
+        })),
+    ];
+    const prev = serie
+      .filter((x) => x.data <= date)
+      .reduce<typeof serie[0] | null>(
+        (a, x) => (!a || x.data > a.data || (x.data === a.data && x.km > a.km) ? x : a),
+        null
+      );
+    const next = serie
+      .filter((x) => x.data > date)
+      .reduce<typeof serie[0] | null>((a, x) => (!a || x.data < a.data ? x : a), null);
+    const isLatest = serie.every((x) => x.data <= date);
+    let erro = '';
+    if (prev && km < prev.km)
+      erro = `KM menor que o registro anterior (${prev.rotulo}: ${formatNumber(prev.km)} km).`;
+    else if (next && km > next.km)
+      erro = `KM maior que o registro seguinte (${next.rotulo}: ${formatNumber(next.km)} km).`;
+    else if (isLatest && km < (Number(veh.kmAtual) || 0))
+      erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(veh.kmAtual)} km).`;
+    return { erro, veh, km };
+  };
+
+  const handleCreateFuel = (e: React.FormEvent) => {
+    e.preventDefault();
+    const litros = Number(fuelForm.litros);
+    const unit = Number(fuelForm.valorUnit);
+    if (!fuelForm.veiculoId || !(litros > 0) || !(unit > 0)) return;
+    const { erro, veh, km } = checkFuelKm(fuelForm);
+    if (erro || !veh) {
+      showToast(erro || 'Veículo inválido', 'error');
+      return;
+    }
+    const total = Math.round(litros * unit * 100) / 100;
+    const nf = {
+      id: 'ab-' + Date.now(),
+      veiculoId: veh.id,
+      tipo: fuelForm.tipo,
+      data: fuelForm.data,
+      litros,
+      valorUnit: unit,
+      valorTotal: total,
+      km,
+      fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado',
+    };
+    setFuelings((p) => [nf, ...p]);
+
+    let msg = `Abastecimento registrado: ${formatDec(litros)} L · ${formatCurrency(total)}.`;
+    const delta = km - (Number(veh.kmAtual) || 0);
+    if (delta > 0) {
+      setVehicles((p) => p.map((v) => (v.id === veh.id ? { ...v, kmAtual: km } : v)));
+      const rolando = (t: typeof tires[0]) =>
+        t.veiculoAtualId === veh.id && t.posicaoAtual !== 'ESTEPE-1';
+      const qtd = tires.filter(rolando).length;
+      if (qtd) {
+        setTires((p) =>
+          p.map((t) =>
+            rolando(t)
+              ? {
+                  ...t,
+                  kmTotal: (Number(t.kmTotal) || 0) + delta,
+                  historicoVeiculos: [
+                    ...(t.historicoVeiculos || []),
+                    {
+                      id: `h-${Date.now()}-${t.id}`,
+                      placa: veh.placa,
+                      modelo: veh.modelo,
+                      kmRodados: delta,
+                      data: fuelForm.data,
+                      obs: 'Sincronizado com o hodômetro (abastecimento)',
+                    },
+                  ],
+                }
+              : t
+          )
+        );
+      }
+      msg += ` Hodômetro de ${veh.placa}: ${formatNumber(km)} km (+${formatNumber(
+        delta
+      )}); ${qtd} pneus montados somaram o mesmo KM.`;
+    }
+    const med = computeFuelMedias([nf, ...fuelings])[nf.id];
+    if (med) msg += ` Média: ${formatDec(med.media)} km/l.`;
+    setShowFuelModal(false);
+    setFuelForm(emptyFuel());
+    showToast(msg);
+  };
+
   const handleCreateFine = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
@@ -399,7 +542,6 @@ export const GlobalModals: React.FC = () => {
     );
   };
 
-  // Drawer de Detalhes do Veículo
   const renderVehicleDrawer = () => {
     const v = vehicles.find((x) => x.id === detailVehicleId);
     if (!v) return null;
@@ -1041,6 +1183,28 @@ export const GlobalModals: React.FC = () => {
                 </div>
               );
             })()}
+            <datalist id="ef-pecas">
+              {[
+                ...new Set(
+                  (company.regrasManutencao || [])
+                    .filter(
+                      (r) => !maintenanceForm.categoria || r.categoria === maintenanceForm.categoria
+                    )
+                    .map((r) => r.peca)
+                ),
+              ].map((x) => (
+                <option key={x} value={x} />
+              ))}
+            </datalist>
+            <Field label="Peça / item da preventiva (opcional)">
+              <input
+                list="ef-pecas"
+                className="inp"
+                placeholder="Ex: Pastilhas de freio"
+                value={maintenanceForm.peca}
+                onChange={(e) => setMaintenanceForm({ ...maintenanceForm, peca: e.target.value })}
+              />
+            </Field>
             <Field label="Descrição do serviço">
               <input
                 required
@@ -1085,6 +1249,155 @@ export const GlobalModals: React.FC = () => {
             <FormActions
               onCancel={() => setShowMaintenanceModal(false)}
               label="Salvar manutenção"
+            />
+          </form>
+        </Modal>
+      )}
+
+      {showFuelModal && (
+        <Modal wide title="Lançar abastecimento" onClose={() => setShowFuelModal(false)}>
+          <form onSubmit={handleCreateFuel} className="space-y-3">
+            <Field label="Veículo abastecido">
+              <select
+                required
+                className="inp"
+                value={fuelForm.veiculoId}
+                onChange={(e) => setFuelForm({ ...fuelForm, veiculoId: e.target.value })}
+              >
+                <option value="">Selecione o veículo...</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.placa} — {v.modelo}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Combustível">
+                <select
+                  className="inp"
+                  value={fuelForm.tipo}
+                  onChange={(e) =>
+                    setFuelForm({ ...fuelForm, tipo: e.target.value as TipoCombustivel })
+                  }
+                >
+                  {TIPOS_COMBUSTIVEL.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Data do abastecimento">
+                <input
+                  type="date"
+                  required
+                  className="inp"
+                  value={fuelForm.data}
+                  onChange={(e) => setFuelForm({ ...fuelForm, data: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Litros">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  className="inp mono"
+                  value={fuelForm.litros}
+                  onChange={(e) => setFuelForm({ ...fuelForm, litros: e.target.value })}
+                />
+              </Field>
+              <Field label="Valor unitário (R$/L)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  required
+                  className="inp mono"
+                  value={fuelForm.valorUnit}
+                  onChange={(e) => setFuelForm({ ...fuelForm, valorUnit: e.target.value })}
+                />
+              </Field>
+              <Field label="Valor total (R$)">
+                <input
+                  readOnly
+                  tabIndex={-1}
+                  className="inp mono"
+                  value={
+                    Number(fuelForm.litros) > 0 && Number(fuelForm.valorUnit) > 0
+                      ? formatCurrency(
+                          Math.round(Number(fuelForm.litros) * Number(fuelForm.valorUnit) * 100) /
+                            100
+                        )
+                      : ''
+                  }
+                />
+              </Field>
+            </div>
+            <Field label="KM do veículo neste abastecimento">
+              <input
+                type="number"
+                min="0"
+                required
+                className="inp mono"
+                value={fuelForm.km}
+                onChange={(e) => setFuelForm({ ...fuelForm, km: e.target.value })}
+              />
+            </Field>
+            {(() => {
+              const vv = vehicles.find((v) => v.id === fuelForm.veiculoId);
+              if (!vv) return null;
+              const chk = fuelForm.km !== '' ? checkFuelKm(fuelForm) : null;
+              if (chk && chk.erro)
+                return (
+                  <div
+                    role="alert"
+                    className="ef-t12_5 px-3 py-2 rounded-lg"
+                    style={{ background: 'var(--red-soft)', color: 'var(--red-ink)' }}
+                  >
+                    {chk.erro}
+                  </div>
+                );
+              const comb = fuelings
+                .filter((f) => f.veiculoId === vv.id && f.tipo !== 'Arla' && f.data <= fuelForm.data)
+                .sort(cmpFuel);
+              const ant = comb[comb.length - 1];
+              const km = Number(fuelForm.km);
+              const lt = Number(fuelForm.litros);
+              const media =
+                fuelForm.tipo !== 'Arla' && ant && km > Number(ant.km) && lt > 0
+                  ? (km - Number(ant.km)) / lt
+                  : null;
+              return (
+                <div className="ef-t12_5" style={{ color: 'var(--mute)' }}>
+                  Hodômetro atual de {vv.placa}: {formatNumber(vv.kmAtual)} km.{' '}
+                  {ant
+                    ? `Último abastecimento de combustível: ${formatNumber(ant.km)} km (${
+                        ant.data
+                      }).`
+                    : 'Primeiro abastecimento de combustível deste veículo: a média começa no próximo.'}
+                  {fuelForm.tipo === 'Arla'
+                    ? ' Arla não entra no cálculo de média.'
+                    : media !== null
+                    ? ` Média deste abastecimento: ${formatDec(media)} km/l.`
+                    : ''}
+                </div>
+              );
+            })()}
+            <Field label="Fornecedor (posto)">
+              <input
+                className="inp"
+                value={fuelForm.fornecedor}
+                onChange={(e) => setFuelForm({ ...fuelForm, fornecedor: e.target.value })}
+              />
+            </Field>
+            <FormActions
+              onCancel={() => setShowFuelModal(false)}
+              label="Salvar abastecimento"
+              v="primary"
             />
           </form>
         </Modal>

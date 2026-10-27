@@ -125,3 +125,57 @@ export const TiresPortfolioDonutChart: React.FC<{
     </div>
   );
 };
+
+
+export const MaintenanceByCategoryBarChart: React.FC<{
+  data: { categoria: string; valor: number; qtd: number }[];
+  theme: 'light' | 'dark';
+}> = ({ data, theme }) => {
+  const C =
+    theme === 'dark'
+      ? { tick: '#9FB1CC', grid: '#1B2D49', bar: '#7FA8DE', tipBg: '#0E1B2E', tipC: '#E8EFF9' }
+      : { tick: '#475A78', grid: '#E5EAF2', bar: '#0E2C50', tipBg: '#FFFFFF', tipC: '#0E2240' };
+  const tip = {
+    borderRadius: 10,
+    border: `1px solid ${C.grid}`,
+    fontSize: 13,
+    background: C.tipBg,
+    color: C.tipC,
+  };
+
+  return (
+    <div className="h-64 p-4">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 16, left: 8, bottom: 0 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke={C.grid} horizontal={false} />
+          <XAxis
+            type="number"
+            tick={{ fontSize: 12, fill: C.tick }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            type="category"
+            dataKey="categoria"
+            width={130}
+            tick={{ fontSize: 12, fill: C.tick }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(v: number) => formatCurrency(v)}
+            contentStyle={tip}
+            itemStyle={{ color: C.tipC }}
+            labelStyle={{ color: C.tipC }}
+            cursor={{ fill: 'rgba(24,179,137,.08)' }}
+          />
+          <Bar dataKey="valor" name="Gasto" fill="#18B389" radius={[0, 6, 6, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};

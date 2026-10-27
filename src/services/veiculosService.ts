@@ -141,3 +141,52 @@ export const getVehicleChassisSlots = (eixosCount: number) => {
   }
   return { spareSlot: { code: 'ESTEPE-1', label: 'Estepe Chassi' }, axles };
 };
+
+
+import { Abastecimento, RegraManutencaoPreventiva } from '@/types/frotawise';
+import { normTxt } from './pneusService';
+
+export const cmpFuel = (a: Abastecimento, b: Abastecimento) =>
+  a.data < b.data ? -1 : a.data > b.data ? 1 : Number(a.km) - Number(b.km);
+
+export const computeFuelMedias = (fuelings: Abastecimento[]) => {
+  const map: Record<
+    string,
+    { media: number; dist: number; litros: number; kmAnterior: number }
+  > = {};
+  const byVeh: Record<string, Abastecimento[]> = {};
+  fuelings.forEach((f) => {
+    (byVeh[f.veiculoId] = byVeh[f.veiculoId] || []).push(f);
+  });
+  Object.values(byVeh).forEach((list) => {
+    const comb = list.filter((f) => f.tipo !== 'Arla').sort(cmpFuel);
+    comb.forEach((f, i) => {
+      if (i === 0) return;
+      const dist = Number(f.km) - Number(comb[i - 1].km);
+      const litros = Number(f.litros) || 0;
+      if (dist > 0 && litros > 0) {
+        map[f.id] = {
+          media: dist / litros,
+          dist,
+          litros,
+          kmAnterior: Number(comb[i - 1].km),
+        };
+      }
+    });
+  });
+  return map;
+};
+
+export const matchesPreventiveRule = (
+  m: { categoria?: string; peca?: string; descricao: string },
+  rule: RegraManutencaoPreventiva
+) => {
+  if (m.categoria !== rule.categoria) return false;
+  const alvo = normTxt(rule.peca);
+  if (!alvo) return true;
+  return (
+    normTxt(m.peca) === alvo ||
+    normTxt(m.peca).includes(alvo) ||
+    normTxt(m.descricao).includes(alvo)
+  );
+};

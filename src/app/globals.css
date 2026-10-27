@@ -135,3 +135,79 @@
 .ef .ef-py1_5{padding-top:0.375rem;padding-bottom:0.375rem}
 .ef .ef-py2_5{padding-top:0.625rem;padding-bottom:0.625rem}
 
+
+/* Animação e estilos do Menu Lateral Retrátil (Minimizar / Expandir) */
+.ef-side {
+  transition: width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), flex-basis 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow-x: hidden;
+}
+.ef-side.ef-side-collapsed {
+  width: 78px;
+  flex: 0 0 78px;
+}
+.ef-nav-label {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+}
+.ef-side.ef-side-collapsed .ef-nav-label {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  display: none;
+}
+.ef-side.ef-side-collapsed .nav {
+  justify-content: center;
+  padding: 12px 0;
+}
+.ef-side.ef-side-collapsed .nav-on::before {
+  left: -12px;
+}
+.ef-nav-badge-mini {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: #06213F;
+}
+.ef-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #AFC0D8;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.2s;
+  flex-shrink: 0;
+}
+.ef-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+@media (max-width: 900px) {
+  .ef-side.ef-side-collapsed {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+  .ef-collapse-btn {
+    display: none;
+  }
+}
+
+
+.ef-g-3{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
+@media (max-width:1280px){.ef-g-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.ef-g-3{grid-template-columns:minmax(0,1fr)}}
+.ef .ef-t40{font-size:40px}

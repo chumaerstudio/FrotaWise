@@ -8,6 +8,8 @@ export type StatusMulta = 'Pendente' | 'Paga' | 'Em Recurso';
 
 export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Pneus / Recapagem';
 
+export type TipoCombustivel = 'Gasolina' | 'Arla' | 'Diesel';
+
 export interface RegraModeloPneu {
   id: string;
   marca: string;
@@ -16,6 +18,14 @@ export interface RegraModeloPneu {
   km2: number;
   km3: number;
   kmSucata: number;
+}
+
+export interface RegraManutencaoPreventiva {
+  id: string;
+  modelo: string;
+  categoria: string;
+  peca: string;
+  km: number;
 }
 
 export interface RegrasGeraisPneus {
@@ -32,6 +42,7 @@ export interface EmpresaConfig {
   cnpj: string;
   logoUrl: string;
   regrasModelos: RegraModeloPneu[];
+  regrasManutencao: RegraManutencaoPreventiva[];
   regrasPneus: RegrasGeraisPneus;
 }
 
@@ -95,6 +106,7 @@ export interface Manutencao {
   veiculoId: string;
   tipo: TipoManutencao;
   categoria?: string;
+  peca?: string;
   km?: number | null;
   descricao: string;
   fornecedor: string;
@@ -115,4 +127,25 @@ export interface Multa {
   valorOriginal?: number;
   valorNIC?: number;
   valor: number;
+}
+
+export interface Abastecimento {
+  id: string;
+  veiculoId: string;
+  tipo: TipoCombustivel;
+  data: string;
+  litros: number;
+  valorUnit: number;
+  valorTotal: number;
+  km: number;
+  fornecedor: string;
+}
+
+export interface AlertaPreventivaItem {
+  v: Veiculo;
+  r: RegraManutencaoPreventiva;
+  ultimo: Manutencao | null;
+  proximo: number | null;
+  restante: number | null;
+  status: 'sem' | 'vencida' | 'proxima' | 'ok';
 }

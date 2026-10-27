@@ -104,7 +104,7 @@ export default function CustosMultasPage() {
                           </Chip>
                           {m.categoria && (
                             <div className="ef-t12 mt-1" style={{ color: 'var(--mute)' }}>
-                              {m.categoria}
+                              {m.categoria}{m.peca ? ` · ${m.peca}` : ''}
                             </div>
                           )}
                         </td>

@@ -5,6 +5,7 @@ export const INITIAL_COMPANY: EmpresaConfig = {
   cnpj: '12.345.678/0001-90',
   logoUrl: '',
   regrasModelos: [],
+  regrasManutencao: [],
   regrasPneus: {
     kmEstocar: 40000,
     kmRecapar: 75000,

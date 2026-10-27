@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -15,9 +15,12 @@ import {
   Moon,
   AlertTriangle,
   CheckCircle2,
+  Fuel,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
-import { APP_VERSION, LOGO_FROTAWISE } from '@/services/api';
+import { APP_VERSION, LOGO_FROTAWISE, LOGO_FROTAWISE_ICON } from '@/services/api';
 import { Btn, cx } from '@/components/ui';
 import { GlobalModals } from '@/components/forms/GlobalModals';
 
@@ -35,6 +38,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setShowMaintenanceModal,
     handleExportBackup,
   } = useEstoquePneus();
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ecofrota_v3_sidebar_collapsed');
+      if (saved === 'true') setSidebarCollapsed(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ecofrota_v3_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const navItems = [
     {
@@ -63,6 +89,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       label: 'Manutenções e multas',
       sub: 'Despesas lançadas por veículo',
       icon: Wrench,
+      badge: null,
+    },
+    {
+      href: '/abastecimento',
+      label: 'Abastecimento',
+      sub: 'Lançamentos de combustível, KM e média de consumo',
+      icon: Fuel,
       badge: null,
     },
     {
@@ -97,21 +130,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      <aside className="ef-side">
-        <div className="px-5 pt-6 pb-5" style={{ borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-          {company.logoUrl ? (
-            <div className="inline-flex rounded-xl bg-white p-2">
-              <img src={company.logoUrl} alt="Logo da empresa" className="h-11 w-auto object-contain" />
-            </div>
-          ) : (
-            <img
-              src={LOGO_FROTAWISE}
-              alt="FrotaWise"
-              draggable={false}
-              className="block h-auto ef-fade"
-              style={{ width: 184 }}
-            />
+      <aside className={cx('ef-side', sidebarCollapsed && 'ef-side-collapsed')}>
+        <div
+          className={cx(
+            'pt-5 pb-4 flex items-center',
+            sidebarCollapsed ? 'px-2 flex-col gap-3 justify-center' : 'px-4 justify-between gap-2'
           )}
+          style={{ borderBottom: '1px solid rgba(255,255,255,.07)' }}
+        >
+          <Link
+            href="/"
+            title="Voltar para a página inicial (Visão geral)"
+            className="inline-flex items-center focus:outline-none transition-transform hover:scale-[1.02]"
+          >
+            {company.logoUrl ? (
+              <div className="inline-flex rounded-xl bg-white p-1.5">
+                <img
+                  src={company.logoUrl}
+                  alt="Logo da empresa"
+                  className={cx('object-contain', sidebarCollapsed ? 'h-8 w-8' : 'h-10 w-auto')}
+                />
+              </div>
+            ) : sidebarCollapsed ? (
+              <img
+                src={LOGO_FROTAWISE_ICON}
+                alt="FrotaWise"
+                draggable={false}
+                className="block h-10 w-10 object-contain ef-fade"
+              />
+            ) : (
+              <img
+                src={LOGO_FROTAWISE}
+                alt="FrotaWise"
+                draggable={false}
+                className="block h-auto ef-fade"
+                style={{ width: 170 }}
+              />
+            )}
+          </Link>
+
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="ef-collapse-btn"
+            title={sidebarCollapsed ? 'Expandir menu lateral' : 'Minimizar menu lateral'}
+            aria-label={sidebarCollapsed ? 'Expandir menu lateral' : 'Minimizar menu lateral'}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
         </div>
 
         <nav className="ef-nav" aria-label="Navegação principal">
@@ -122,21 +188,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
+                title={sidebarCollapsed ? item.label : undefined}
                 aria-current={isOn ? 'page' : undefined}
                 className={cx('nav', isOn && 'nav-on')}
               >
                 <span className="flex items-center gap-3">
-                  <Icon size={18} />
-                  {item.label}
+                  <Icon size={19} className="shrink-0" />
+                  <span className="ef-nav-label">{item.label}</span>
                 </span>
-                {item.badge && (
-                  <span
-                    className="mono ef-t11 font-bold px-2 ef-py0_5 rounded-full"
-                    style={{ background: 'var(--brand)', color: '#06213F' }}
-                  >
-                    {item.badge}
-                  </span>
-                )}
+                {item.badge &&
+                  (sidebarCollapsed ? (
+                    <span className="mono ef-nav-badge-mini">{item.badge}</span>
+                  ) : (
+                    <span
+                      className="mono ef-t11 font-bold px-2 ef-py0_5 rounded-full"
+                      style={{ background: 'var(--brand)', color: '#06213F' }}
+                    >
+                      {item.badge}
+                    </span>
+                  ))}
               </Link>
             );
           })}
@@ -145,15 +215,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="ef-side-foot">
           <button
             onClick={handleExportBackup}
+            title={sidebarCollapsed ? 'Salvar backup no Pen Drive' : undefined}
             className="btn w-full"
-            style={{ background: 'rgba(255,255,255,.08)', color: '#fff' }}
+            style={{
+              background: 'rgba(255,255,255,.08)',
+              color: '#fff',
+              padding: sidebarCollapsed ? '10px 0' : undefined,
+            }}
           >
-            <Download size={16} color="#18B389" />
-            Salvar backup no Pen Drive
+            <Download size={16} color="#18B389" className="shrink-0" />
+            {!sidebarCollapsed && <span>Salvar backup no Pen Drive</span>}
           </button>
-          <div className="ef-t11_5 mt-3 text-center" style={{ color: '#7F93B3' }}>
-            Versão {APP_VERSION} · {company.nomeEmpresa}
-          </div>
+          {!sidebarCollapsed && (
+            <div className="ef-t11_5 mt-3 text-center" style={{ color: '#7F93B3' }}>
+              Versão {APP_VERSION} · {company.nomeEmpresa}
+            </div>
+          )}
         </div>
       </aside>
 
