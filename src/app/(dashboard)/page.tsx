@@ -333,6 +333,7 @@ export default function DashboardPage() {
                   <th>Categoria / peça</th>
                   <th className="ef-tr">Última (km)</th>
                   <th className="ef-tr">Próxima (km)</th>
+                  <th className="ef-tr">KM atual</th>
                   <th className="ef-tr">Restante</th>
                   <th className="ef-tr">Ação</th>
                 </tr>
@@ -356,6 +357,13 @@ export default function DashboardPage() {
                     </td>
                     <td className="mono text-right">{formatNumber(al.ultimo?.km || 0)} km</td>
                     <td className="mono text-right">{formatNumber(al.proximo || 0)} km</td>
+                    <td className="mono text-right">
+                      {formatNumber(al.atual.km)} km
+                      <div style={{ fontSize: 11.5, fontWeight: 400, color: 'var(--mute)' }}>
+                        {al.atual.origem}
+                        {al.atual.data ? ` · ${al.atual.data}` : ''}
+                      </div>
+                    </td>
                     <td
                       className="mono text-right font-bold"
                       style={{ color: al.status === 'vencida' ? 'var(--red)' : 'var(--ink)' }}

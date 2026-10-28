@@ -6,6 +6,7 @@ import {
   AlertaPreventivaItem,
   AlertaRemold,
   EmpresaConfig,
+  KmAtualLancado,
   Manutencao,
   Multa,
   Pneu,
@@ -18,11 +19,14 @@ import {
   INITIAL_FINES,
   INITIAL_MAINTENANCES,
   INITIAL_VEHICLES,
+  applyOdometer,
   cmpFuel,
   computeFuelMedias,
   matchesPreventiveRule,
+  odometerFrom,
+  vehicleLaunchKms,
 } from '@/services/veiculosService';
-import { CATEGORIAS_MANUTENCAO, formatNumber, today } from '@/services/api';
+import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 
 interface TireActionModalState {
   tire: Pneu;
@@ -101,14 +105,36 @@ interface FrotaWiseContextValue {
   setShowVehicleModal: React.Dispatch<React.SetStateAction<boolean>>;
   showTireModal: boolean;
   setShowTireModal: React.Dispatch<React.SetStateAction<boolean>>;
+  editingTireId: string | null;
+  setEditingTireId: React.Dispatch<React.SetStateAction<string | null>>;
+  startEditTire: (t: Pneu) => void;
+  handleDeleteTire: (t: Pneu) => void;
   showMaintenanceModal: boolean;
   setShowMaintenanceModal: React.Dispatch<React.SetStateAction<boolean>>;
+  editingMaintId: string | null;
+  setEditingMaintId: React.Dispatch<React.SetStateAction<string | null>>;
+  startEditMaint: (m: Manutencao) => void;
+  handleDeleteMaintenance: (m: Manutencao) => void;
   maintenancePrefill: MaintenancePrefill | null;
   setMaintenancePrefill: React.Dispatch<React.SetStateAction<MaintenancePrefill | null>>;
   showFineModal: boolean;
   setShowFineModal: React.Dispatch<React.SetStateAction<boolean>>;
+  editingFineId: string | null;
+  setEditingFineId: React.Dispatch<React.SetStateAction<string | null>>;
+  startEditFine: (f: Multa) => void;
+  handleDeleteFine: (f: Multa) => void;
   showFuelModal: boolean;
   setShowFuelModal: React.Dispatch<React.SetStateAction<boolean>>;
+  editingFuelId: string | null;
+  setEditingFuelId: React.Dispatch<React.SetStateAction<string | null>>;
+  startEditFuel: (f: Abastecimento) => void;
+  handleDeleteFuel: (f: Abastecimento) => void;
+  syncOdometers: (
+    vehIds: string[],
+    nextFuelings: Abastecimento[],
+    nextMaints: Manutencao[],
+    label: string
+  ) => string[];
   handleExportBackup: () => void;
 }
 
@@ -166,7 +192,10 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const [maintenances, setMaintenances] = useLocalState<Manutencao[]>(
     'ecofrota_v3_maintenances',
     INITIAL_MAINTENANCES,
-    (arr) => (Array.isArray(arr) ? arr.map((m) => ({ categoria: '', peca: '', km: null, ...m })) : INITIAL_MAINTENANCES)
+    (arr) =>
+      Array.isArray(arr)
+        ? arr.map((m) => ({ categoria: '', peca: '', km: null, ...m }))
+        : INITIAL_MAINTENANCES
   );
   const [fines, setFines] = useLocalState<Multa[]>('ecofrota_v3_fines', INITIAL_FINES);
   const [fuelings, setFuelings] = useLocalState<Abastecimento[]>(
@@ -193,10 +222,14 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showTireModal, setShowTireModal] = useState(false);
+  const [editingTireId, setEditingTireId] = useState<string | null>(null);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [editingMaintId, setEditingMaintId] = useState<string | null>(null);
   const [maintenancePrefill, setMaintenancePrefill] = useState<MaintenancePrefill | null>(null);
   const [showFineModal, setShowFineModal] = useState(false);
+  const [editingFineId, setEditingFineId] = useState<string | null>(null);
   const [showFuelModal, setShowFuelModal] = useState(false);
+  const [editingFuelId, setEditingFuelId] = useState<string | null>(null);
 
   const tireAlerts = useMemo<AlertaRemold[]>(() => {
     const alerts: AlertaRemold[] = [];
@@ -331,6 +364,28 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
 
   const preventiveList = useMemo<AlertaPreventivaItem[]>(() => {
     const out: AlertaPreventivaItem[] = [];
+    const kmAtualLancado = (v: Veiculo): KmAtualLancado => {
+      const regs = [
+        ...fuelings
+          .filter((f) => f.veiculoId === v.id && Number.isFinite(Number(f.km)))
+          .map((f) => ({ km: Number(f.km), data: f.data, origem: 'Abastecimento' })),
+        ...maintenances
+          .filter(
+            (m) =>
+              m.veiculoId === v.id &&
+              m.km !== null &&
+              m.km !== undefined &&
+              Number.isFinite(Number(m.km))
+          )
+          .map((m) => ({ km: Number(m.km), data: m.data, origem: 'Manutenção' })),
+      ];
+      const ult = regs.reduce<KmAtualLancado | null>(
+        (a, x) => (!a || (x.data || '') > (a.data || '') || (x.data === a.data && x.km > a.km) ? x : a),
+        null
+      );
+      return ult || { km: Number(v.kmAtual) || 0, data: null, origem: 'Cadastro do veículo' };
+    };
+
     vehicles.forEach((v) =>
       (company.regrasManutencao || []).forEach((r) => {
         if (r.modelo && normTxt(r.modelo) !== normTxt(v.modelo)) return;
@@ -346,25 +401,27 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
           (a, m) => (!a || Number(m.km) > Number(a.km) ? m : a),
           null
         );
+        const atual = kmAtualLancado(v);
         if (!ultimo) {
-          out.push({ v, r, ultimo: null, proximo: null, restante: null, status: 'sem' });
+          out.push({ v, r, ultimo: null, proximo: null, restante: null, atual, status: 'sem' });
           return;
         }
         const proximo = Number(ultimo.km) + Number(r.km);
-        const restante = proximo - (Number(v.kmAtual) || 0);
-        const aviso = Math.max(500, Math.round(Number(r.km) * 0.1));
+        const restante = proximo - atual.km;
         out.push({
           v,
           r,
           ultimo,
           proximo,
           restante,
-          status: restante <= 0 ? 'vencida' : restante <= aviso ? 'proxima' : 'ok',
+          atual,
+          status:
+            restante <= 0 ? 'vencida' : restante <= KM_AVISO_PREVENTIVA ? 'proxima' : 'ok',
         });
       })
     );
     return out;
-  }, [vehicles, maintenances, company.regrasManutencao]);
+  }, [vehicles, maintenances, fuelings, company.regrasManutencao]);
 
   const preventiveAlerts = useMemo(
     () =>
@@ -373,6 +430,126 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         .sort((a, b) => (a.restante || 0) - (b.restante || 0)),
     [preventiveList]
   );
+
+  const syncOdometers = (
+    vehIds: string[],
+    nextFuelings: Abastecimento[],
+    nextMaints: Manutencao[],
+    label: string
+  ) => {
+    let vs = vehicles;
+    let ts = tires;
+    const mudancas: string[] = [];
+    [...new Set(vehIds)].forEach((id) => {
+      const v = vs.find((x) => x.id === id);
+      if (!v) return;
+      const antes = Number(v.kmAtual) || 0;
+      const novo = odometerFrom(v, vehicleLaunchKms(id, nextFuelings, nextMaints));
+      if (novo === antes) return;
+      const r = applyOdometer(
+        vs,
+        ts,
+        id,
+        novo,
+        `Sincronizado com o hodômetro (${label})`,
+        today()
+      );
+      vs = r.vehs;
+      ts = r.tirs;
+      mudancas.push(`${v.placa}: ${formatNumber(antes)} → ${formatNumber(novo)} km`);
+    });
+    if (mudancas.length) {
+      setVehicles(vs);
+      setTires(ts);
+    }
+    return mudancas;
+  };
+
+  const sufixoKm = (mud: string[]) =>
+    mud.length
+      ? ` Hodômetro ajustado (${mud.join('; ')}); pneus montados acompanharam.`
+      : '';
+
+  const startEditFuel = (f: Abastecimento) => {
+    setEditingFuelId(f.id);
+    setShowFuelModal(true);
+  };
+
+  const handleDeleteFuel = (f: Abastecimento) => {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        `Excluir o abastecimento de ${f.data} (${formatDec(f.litros)} L · ${formatCurrency(
+          f.valorTotal
+        )})?
+O hodômetro e os pneus montados serão recalculados.`
+      )
+    )
+      return;
+    const next = fuelings.filter((x) => x.id !== f.id);
+    setFuelings(next);
+    const mud = syncOdometers(
+      [f.veiculoId],
+      next,
+      maintenances,
+      'exclusão de abastecimento'
+    );
+    showToast('Abastecimento excluído.' + sufixoKm(mud));
+  };
+
+  const startEditMaint = (m: Manutencao) => {
+    setEditingMaintId(m.id);
+    setShowMaintenanceModal(true);
+  };
+
+  const handleDeleteMaintenance = (m: Manutencao) => {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        `Excluir a manutenção ${m.osNumero} (${m.descricao})?
+O hodômetro e os pneus montados serão recalculados.`
+      )
+    )
+      return;
+    const next = maintenances.filter((x) => x.id !== m.id);
+    setMaintenances(next);
+    const mud = syncOdometers([m.veiculoId], fuelings, next, 'exclusão de manutenção');
+    showToast('Manutenção excluído.' + sufixoKm(mud));
+  };
+
+  const startEditFine = (f: Multa) => {
+    setEditingFineId(f.id);
+    setShowFineModal(true);
+  };
+
+  const handleDeleteFine = (f: Multa) => {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`Excluir a multa ${f.ait} (${formatCurrency(f.valor)})?`)
+    )
+      return;
+    setFines((p) => p.filter((x) => x.id !== f.id));
+    showToast('Multa excluída.');
+  };
+
+  const startEditTire = (t: Pneu) => {
+    setEditingTireId(t.id);
+    setShowTireModal(true);
+  };
+
+  const handleDeleteTire = (t: Pneu) => {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        `Excluir o pneu Fogo #${t.fogo} (${t.marca})?
+O histórico dele também será apagado.`
+      )
+    )
+      return;
+    setTires((p) => p.filter((x) => x.id !== t.id));
+    if (selectedTireForActionId === t.id) setSelectedTireForActionId(null);
+    showToast(`Pneu Fogo #${t.fogo} excluído.`);
+  };
 
   const openTireOperationModal = (
     tire: Pneu,
@@ -405,7 +582,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const handleExportBackup = () => {
     const payload = {
       sistema: 'FrotaWise Enterprise Offline',
-      versao: '3.4.0',
+      versao: '3.5.0',
       schema: 1,
       dataExportacao: new Date().toISOString(),
       company,
@@ -473,14 +650,31 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         setShowVehicleModal,
         showTireModal,
         setShowTireModal,
+        editingTireId,
+        setEditingTireId,
+        startEditTire,
+        handleDeleteTire,
         showMaintenanceModal,
         setShowMaintenanceModal,
+        editingMaintId,
+        setEditingMaintId,
+        startEditMaint,
+        handleDeleteMaintenance,
         maintenancePrefill,
         setMaintenancePrefill,
         showFineModal,
         setShowFineModal,
+        editingFineId,
+        setEditingFineId,
+        startEditFine,
+        handleDeleteFine,
         showFuelModal,
         setShowFuelModal,
+        editingFuelId,
+        setEditingFuelId,
+        startEditFuel,
+        handleDeleteFuel,
+        syncOdometers,
         handleExportBackup,
       }}
     >

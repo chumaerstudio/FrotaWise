@@ -32,6 +32,8 @@ export default function PneusHubPage() {
     openTireOperationModal,
     setHistoryModalTire,
     setShowTireModal,
+    startEditTire,
+    handleDeleteTire,
     showToast,
   } = useEstoquePneus();
 
@@ -465,6 +467,12 @@ export default function PneusHubPage() {
                           </Btn>
                           <Btn sm onClick={() => openTireOperationModal(t, 'Sucatear')}>
                             Sucatear
+                          </Btn>
+                          <Btn sm onClick={() => startEditTire(t)}>
+                            Editar
+                          </Btn>
+                          <Btn sm className="ef-del" onClick={() => handleDeleteTire(t)}>
+                            Excluir
                           </Btn>
                         </td>
                       </tr>

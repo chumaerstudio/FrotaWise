@@ -14,7 +14,12 @@ import {
   today,
 } from '@/services/api';
 import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
-import { cmpFuel, computeFuelMedias } from '@/services/veiculosService';
+import {
+  cmpFuel,
+  computeFuelMedias,
+  odometerFrom,
+  vehicleLaunchKms,
+} from '@/services/veiculosService';
 import {
   Btn,
   Chip,
@@ -58,14 +63,23 @@ export const GlobalModals: React.FC = () => {
     setShowVehicleModal,
     showTireModal,
     setShowTireModal,
+    editingTireId,
+    setEditingTireId,
     showMaintenanceModal,
     setShowMaintenanceModal,
+    editingMaintId,
+    setEditingMaintId,
     maintenancePrefill,
     setMaintenancePrefill,
     showFineModal,
     setShowFineModal,
+    editingFineId,
+    setEditingFineId,
     showFuelModal,
     setShowFuelModal,
+    editingFuelId,
+    setEditingFuelId,
+    syncOdometers,
   } = useEstoquePneus();
 
   const [actionKmInput, setActionKmInput] = useState('');
@@ -93,12 +107,31 @@ export const GlobalModals: React.FC = () => {
     fogo: '',
     marca: '',
     medida: '295/80 R22.5',
-    sulcoMm: 15,
-    recapagens: 0,
-    kmInicial: 0,
+    sulcoMm: '15',
+    recapagens: '0',
+    kmInicial: '0',
     localEstoque: 'Prateleira A-01',
   };
   const [tireForm, setTireForm] = useState(emptyTire);
+
+  useEffect(() => {
+    if (showTireModal && editingTireId) {
+      const t = tires.find((x) => x.id === editingTireId);
+      if (t) {
+        setTireForm({
+          fogo: t.fogo,
+          marca: t.marca,
+          medida: t.medida,
+          sulcoMm: String(t.sulcoMm),
+          recapagens: String(t.recapagens),
+          kmInicial: String(t.kmTotal),
+          localEstoque: t.localEstoque || '',
+        });
+      }
+    } else if (!showTireModal) {
+      setTireForm(emptyTire);
+    }
+  }, [showTireModal, editingTireId, tires]);
 
   const emptyMaint = () => ({
     osNumero: '',
@@ -115,7 +148,23 @@ export const GlobalModals: React.FC = () => {
   const [maintenanceForm, setMaintenanceForm] = useState(emptyMaint());
 
   useEffect(() => {
-    if (showMaintenanceModal && maintenancePrefill) {
+    if (showMaintenanceModal && editingMaintId) {
+      const m = maintenances.find((x) => x.id === editingMaintId);
+      if (m) {
+        setMaintenanceForm({
+          osNumero: m.osNumero || '',
+          veiculoId: m.veiculoId,
+          tipo: m.tipo,
+          categoria: m.categoria || '',
+          peca: m.peca || '',
+          km: m.km !== null && m.km !== undefined ? String(m.km) : '',
+          descricao: m.descricao || '',
+          fornecedor: m.fornecedor || '',
+          data: m.data,
+          valor: String(m.valor),
+        });
+      }
+    } else if (showMaintenanceModal && maintenancePrefill) {
       setMaintenanceForm((prev) => ({
         ...prev,
         veiculoId: maintenancePrefill.veiculoId ?? prev.veiculoId,
@@ -124,8 +173,10 @@ export const GlobalModals: React.FC = () => {
         tipo: maintenancePrefill.tipo ?? prev.tipo,
       }));
       setMaintenancePrefill(null);
+    } else if (!showMaintenanceModal) {
+      setMaintenanceForm(emptyMaint());
     }
-  }, [showMaintenanceModal, maintenancePrefill, setMaintenancePrefill]);
+  }, [showMaintenanceModal, editingMaintId, maintenancePrefill, maintenances, setMaintenancePrefill]);
 
   const emptyFine = () => ({
     ait: '',
@@ -140,6 +191,27 @@ export const GlobalModals: React.FC = () => {
   });
   const [fineForm, setFineForm] = useState(emptyFine());
 
+  useEffect(() => {
+    if (showFineModal && editingFineId) {
+      const f = fines.find((x) => x.id === editingFineId);
+      if (f) {
+        setFineForm({
+          ait: f.ait || '',
+          veiculoId: f.veiculoId,
+          motivo: f.motivo || '',
+          identificado: f.identificado !== false,
+          motorista: f.identificado === false ? '' : f.motorista || '',
+          status: f.status,
+          data: f.data,
+          pontos: f.pontos ?? 4,
+          valor: String(f.valorOriginal ?? f.valor),
+        });
+      }
+    } else if (!showFineModal) {
+      setFineForm(emptyFine());
+    }
+  }, [showFineModal, editingFineId, fines]);
+
   const emptyFuel = () => ({
     veiculoId: '',
     tipo: 'Diesel' as TipoCombustivel,
@@ -150,6 +222,54 @@ export const GlobalModals: React.FC = () => {
     fornecedor: '',
   });
   const [fuelForm, setFuelForm] = useState(emptyFuel());
+
+  useEffect(() => {
+    if (showFuelModal && editingFuelId) {
+      const f = fuelings.find((x) => x.id === editingFuelId);
+      if (f) {
+        setFuelForm({
+          veiculoId: f.veiculoId,
+          tipo: f.tipo,
+          data: f.data,
+          litros: String(f.litros),
+          valorUnit: String(f.valorUnit),
+          km: String(f.km),
+          fornecedor: f.fornecedor || '',
+        });
+      }
+    } else if (!showFuelModal) {
+      setFuelForm(emptyFuel());
+    }
+  }, [showFuelModal, editingFuelId, fuelings]);
+
+  const closeTireModal = () => {
+    setShowTireModal(false);
+    setEditingTireId(null);
+    setTireForm(emptyTire);
+  };
+
+  const closeMaintenanceModal = () => {
+    setShowMaintenanceModal(false);
+    setEditingMaintId(null);
+    setMaintenanceForm(emptyMaint());
+  };
+
+  const closeFineModal = () => {
+    setShowFineModal(false);
+    setEditingFineId(null);
+    setFineForm(emptyFine());
+  };
+
+  const closeFuelModal = () => {
+    setShowFuelModal(false);
+    setEditingFuelId(null);
+    setFuelForm(emptyFuel());
+  };
+
+  const sufixoKm = (mud: string[]) =>
+    mud.length
+      ? ` Hodômetro ajustado (${mud.join('; ')}); pneus montados acompanharam.`
+      : '';
 
   const handleConfirmTireOperation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,6 +371,7 @@ export const GlobalModals: React.FC = () => {
       categoria: vehicleForm.categoria.trim(),
       eixos: Math.max(2, Math.min(6, Number(vehicleForm.eixos) || 3)),
       kmAtual: Number(vehicleForm.kmAtual) || 0,
+      kmBase: Number(vehicleForm.kmAtual) || 0,
       status: 'Operando' as const,
     };
     setVehicles((p) => [...p, nv]);
@@ -291,19 +412,51 @@ export const GlobalModals: React.FC = () => {
           : [],
     };
     setTires((p) => [...p, nt]);
-    setShowTireModal(false);
-    setTireForm(emptyTire);
+    closeTireModal();
     showToast(`Pneu Fogo #${nt.fogo} cadastrado no estoque!`);
   };
 
-  const checkMaintenanceKm = (form: typeof maintenanceForm) => {
+  const handleUpdateTire = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tireForm.fogo.trim() || !tireForm.marca.trim()) return;
+    setTires((p) =>
+      p.map((t) =>
+        t.id === editingTireId
+          ? {
+              ...t,
+              fogo: tireForm.fogo.toUpperCase().trim(),
+              marca: tireForm.marca.trim(),
+              medida: tireForm.medida.trim() || t.medida,
+              sulcoMm: tireForm.sulcoMm === '' ? t.sulcoMm : Number(tireForm.sulcoMm),
+              recapagens: Math.max(0, Number(tireForm.recapagens) || 0),
+              kmTotal: Math.max(0, Number(tireForm.kmInicial) || 0),
+              localEstoque: tireForm.localEstoque.trim() || t.localEstoque,
+            }
+          : t
+      )
+    );
+    closeTireModal();
+    showToast('Pneu atualizado!');
+  };
+
+  const checkMaintenanceKm = (form: typeof maintenanceForm, excludeId?: string | null) => {
     const veh = vehicles.find((v) => v.id === form.veiculoId);
     const km = Math.round(Number(form.km));
     if (!veh) return { erro: '', veh, km };
     if (form.km === '' || !Number.isFinite(km) || km < 0)
       return { erro: 'Informe a quilometragem do veículo nesta manutenção.', veh, km };
     const date = form.data;
-    const daVeiculo = maintenances.filter((m) => m.veiculoId === veh.id);
+    const daVeiculo = maintenances.filter((m) => m.veiculoId === veh.id && m.id !== excludeId);
+    const baseOdo = excludeId
+      ? odometerFrom(
+          veh,
+          vehicleLaunchKms(
+            veh.id,
+            fuelings,
+            maintenances.filter((m) => m.id !== excludeId)
+          )
+        )
+      : Number(veh.kmAtual) || 0;
     const comKm = daVeiculo.filter(
       (m) => m.km !== null && m.km !== undefined && Number.isFinite(Number(m.km))
     );
@@ -327,8 +480,8 @@ export const GlobalModals: React.FC = () => {
       erro = `KM maior que a manutenção seguinte (${next.osNumero}: ${formatNumber(
         next.km || 0
       )} km em ${next.data}).`;
-    else if (isLatest && km < (Number(veh.kmAtual) || 0))
-      erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(veh.kmAtual)} km).`;
+    else if (isLatest && km < baseOdo)
+      erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(baseOdo)} km).`;
     return { erro, veh, km };
   };
 
@@ -397,21 +550,66 @@ export const GlobalModals: React.FC = () => {
         km
       )} km (+${formatNumber(delta)}); ${qtd} pneus montados somaram o mesmo KM.`;
     }
-    setShowMaintenanceModal(false);
-    setMaintenanceForm(emptyMaint());
+    closeMaintenanceModal();
     showToast(msg);
   };
 
-  const checkFuelKm = (form: typeof fuelForm) => {
+  const handleUpdateMaintenance = (e: React.FormEvent) => {
+    e.preventDefault();
+    const old = maintenances.find((m) => m.id === editingMaintId);
+    if (
+      !old ||
+      !maintenanceForm.veiculoId ||
+      !maintenanceForm.descricao.trim() ||
+      !maintenanceForm.valor ||
+      !maintenanceForm.categoria
+    )
+      return;
+    const { erro, veh, km } = checkMaintenanceKm(maintenanceForm, editingMaintId);
+    if (erro || !veh) {
+      showToast(erro || 'Veículo inválido', 'error');
+      return;
+    }
+    const upd = {
+      ...old,
+      osNumero: maintenanceForm.osNumero.trim() || old.osNumero,
+      veiculoId: veh.id,
+      tipo: maintenanceForm.tipo,
+      categoria: maintenanceForm.categoria,
+      peca: (maintenanceForm.peca || '').trim(),
+      km,
+      descricao: maintenanceForm.descricao.trim(),
+      fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
+      data: maintenanceForm.data,
+      valor: Number(maintenanceForm.valor) || 0,
+    };
+    const next = maintenances.map((m) => (m.id === old.id ? upd : m));
+    setMaintenances(next);
+    const mud = syncOdometers([old.veiculoId, veh.id], fuelings, next, 'edição de manutenção');
+    closeMaintenanceModal();
+    showToast('Manutenção atualizada!' + sufixoKm(mud));
+  };
+
+  const checkFuelKm = (form: typeof fuelForm, excludeId?: string | null) => {
     const veh = vehicles.find((v) => v.id === form.veiculoId);
     const km = Math.round(Number(form.km));
     if (!veh) return { erro: '', veh, km };
     if (form.km === '' || !Number.isFinite(km) || km < 0)
       return { erro: 'Informe a quilometragem do veículo neste abastecimento.', veh, km };
     const date = form.data;
+    const baseOdo = excludeId
+      ? odometerFrom(
+          veh,
+          vehicleLaunchKms(
+            veh.id,
+            fuelings.filter((f) => f.id !== excludeId),
+            maintenances
+          )
+        )
+      : Number(veh.kmAtual) || 0;
     const serie = [
       ...fuelings
-        .filter((f) => f.veiculoId === veh.id)
+        .filter((f) => f.veiculoId === veh.id && f.id !== excludeId)
         .map((f) => ({ data: f.data, km: Number(f.km), rotulo: `abastecimento de ${f.data}` })),
       ...maintenances
         .filter(
@@ -442,8 +640,8 @@ export const GlobalModals: React.FC = () => {
       erro = `KM menor que o registro anterior (${prev.rotulo}: ${formatNumber(prev.km)} km).`;
     else if (next && km > next.km)
       erro = `KM maior que o registro seguinte (${next.rotulo}: ${formatNumber(next.km)} km).`;
-    else if (isLatest && km < (Number(veh.kmAtual) || 0))
-      erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(veh.kmAtual)} km).`;
+    else if (isLatest && km < baseOdo)
+      erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(baseOdo)} km).`;
     return { erro, veh, km };
   };
 
@@ -507,9 +705,37 @@ export const GlobalModals: React.FC = () => {
     }
     const med = computeFuelMedias([nf, ...fuelings])[nf.id];
     if (med) msg += ` Média: ${formatDec(med.media)} km/l.`;
-    setShowFuelModal(false);
-    setFuelForm(emptyFuel());
+    closeFuelModal();
     showToast(msg);
+  };
+
+  const handleUpdateFuel = (e: React.FormEvent) => {
+    e.preventDefault();
+    const old = fuelings.find((f) => f.id === editingFuelId);
+    const litros = Number(fuelForm.litros);
+    const unit = Number(fuelForm.valorUnit);
+    if (!old || !fuelForm.veiculoId || !(litros > 0) || !(unit > 0)) return;
+    const { erro, veh, km } = checkFuelKm(fuelForm, editingFuelId);
+    if (erro || !veh) {
+      showToast(erro || 'Veículo inválido', 'error');
+      return;
+    }
+    const upd = {
+      ...old,
+      veiculoId: veh.id,
+      tipo: fuelForm.tipo,
+      data: fuelForm.data,
+      litros,
+      valorUnit: unit,
+      valorTotal: Math.round(litros * unit * 100) / 100,
+      km,
+      fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado',
+    };
+    const next = fuelings.map((f) => (f.id === old.id ? upd : f));
+    setFuelings(next);
+    const mud = syncOdometers([old.veiculoId, veh.id], next, maintenances, 'edição de abastecimento');
+    closeFuelModal();
+    showToast('Abastecimento atualizado!' + sufixoKm(mud));
   };
 
   const handleCreateFine = (e: React.FormEvent) => {
@@ -533,13 +759,38 @@ export const GlobalModals: React.FC = () => {
       valor: base + nic,
     };
     setFines((p) => [nf, ...p]);
-    setShowFineModal(false);
-    setFineForm(emptyFine());
+    closeFineModal();
     showToast(
       ident
         ? 'Multa lançada nas despesas do veículo!'
         : `Multa lançada com NIC: total ${formatCurrency(nf.valor)}.`
     );
+  };
+
+  const handleUpdateFine = (e: React.FormEvent) => {
+    e.preventDefault();
+    const old = fines.find((f) => f.id === editingFineId);
+    if (!old || !fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
+    const ident = fineForm.identificado !== false;
+    const base = Number(fineForm.valor) || 0;
+    const nic = ident ? 0 : base * NIC_MULTIPLICADOR;
+    const upd = {
+      ...old,
+      ait: fineForm.ait.toUpperCase().trim() || old.ait,
+      veiculoId: fineForm.veiculoId,
+      motivo: fineForm.motivo.trim(),
+      identificado: ident,
+      motorista: ident ? fineForm.motorista.trim() || 'Não informado' : 'Não identificado',
+      status: fineForm.status,
+      data: fineForm.data,
+      pontos: ident ? Number(fineForm.pontos) || 4 : 0,
+      valorOriginal: base,
+      valorNIC: nic,
+      valor: base + nic,
+    };
+    setFines((p) => p.map((f) => (f.id === old.id ? upd : f)));
+    closeFineModal();
+    showToast('Multa atualizada!');
   };
 
   const renderVehicleDrawer = () => {
@@ -744,7 +995,7 @@ export const GlobalModals: React.FC = () => {
             </Btn>
             <Btn
               onClick={() => {
-                setMaintenanceForm({ ...emptyMaint(), veiculoId: v.id });
+                setMaintenancePrefill({ veiculoId: v.id });
                 setShowMaintenanceModal(true);
               }}
             >
@@ -892,7 +1143,10 @@ export const GlobalModals: React.FC = () => {
                         {h.data} · {h.obs}
                       </div>
                     </div>
-                    <Chip tone="teal">+{formatNumber(h.kmRodados)} km</Chip>
+                    <Chip tone={Number(h.kmRodados) < 0 ? 'red' : 'teal'}>
+                      {Number(h.kmRodados) < 0 ? '' : '+'}
+                      {formatNumber(h.kmRodados)} km
+                    </Chip>
                   </div>
                 </li>
               ))}
@@ -987,8 +1241,8 @@ export const GlobalModals: React.FC = () => {
       )}
 
       {showTireModal && (
-        <Modal title="Cadastrar pneu" onClose={() => setShowTireModal(false)}>
-          <form onSubmit={handleCreateTire} className="space-y-3">
+        <Modal title={editingTireId ? 'Editar pneu' : 'Cadastrar pneu'} onClose={closeTireModal}>
+          <form onSubmit={editingTireId ? handleUpdateTire : handleCreateTire} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Nº fogo">
                 <input
@@ -1001,6 +1255,7 @@ export const GlobalModals: React.FC = () => {
               </Field>
               <Field label="Medida">
                 <input
+                  list="ef-medidas-regras"
                   className="inp mono"
                   value={tireForm.medida}
                   onChange={(e) => setTireForm({ ...tireForm, medida: e.target.value })}
@@ -1010,6 +1265,7 @@ export const GlobalModals: React.FC = () => {
             <Field label="Marca / modelo">
               <input
                 required
+                list="ef-marcas-regras"
                 className="inp"
                 value={tireForm.marca}
                 onChange={(e) => setTireForm({ ...tireForm, marca: e.target.value })}
@@ -1022,7 +1278,7 @@ export const GlobalModals: React.FC = () => {
                   step="0.1"
                   className="inp mono"
                   value={tireForm.sulcoMm}
-                  onChange={(e) => setTireForm({ ...tireForm, sulcoMm: Number(e.target.value) })}
+                  onChange={(e) => setTireForm({ ...tireForm, sulcoMm: e.target.value })}
                 />
               </Field>
               <Field label="Recapagens">
@@ -1031,28 +1287,46 @@ export const GlobalModals: React.FC = () => {
                   min="0"
                   className="inp mono"
                   value={tireForm.recapagens}
-                  onChange={(e) =>
-                    setTireForm({ ...tireForm, recapagens: Number(e.target.value) })
-                  }
+                  onChange={(e) => setTireForm({ ...tireForm, recapagens: e.target.value })}
                 />
               </Field>
-              <Field label="KM inicial">
+              <Field label={editingTireId ? 'KM acumulado' : 'KM inicial'}>
                 <input
                   type="number"
                   min="0"
                   className="inp mono"
                   value={tireForm.kmInicial}
-                  onChange={(e) => setTireForm({ ...tireForm, kmInicial: Number(e.target.value) })}
+                  onChange={(e) => setTireForm({ ...tireForm, kmInicial: e.target.value })}
                 />
               </Field>
             </div>
+            <datalist id="ef-marcas-regras">
+              {[
+                ...new Set([
+                  ...(company.regrasModelos || []).map((r) => r.marca),
+                  ...tires.map((t) => t.marca),
+                ]),
+              ].map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+            <datalist id="ef-medidas-regras">
+              {[
+                ...new Set([
+                  ...(company.regrasModelos || []).map((r) => r.medida).filter(Boolean),
+                  ...tires.map((t) => t.medida),
+                ]),
+              ].map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
             {tireForm.marca.trim() &&
               (() => {
                 const lim = getTireLimits(
                   {
                     marca: tireForm.marca,
                     medida: tireForm.medida,
-                    recapagens: tireForm.recapagens,
+                    recapagens: Number(tireForm.recapagens) || 0,
                   },
                   company
                 );
@@ -1081,14 +1355,25 @@ export const GlobalModals: React.FC = () => {
                 onChange={(e) => setTireForm({ ...tireForm, localEstoque: e.target.value })}
               />
             </Field>
-            <FormActions onCancel={() => setShowTireModal(false)} label="Salvar pneu" v="primary" />
+            <FormActions
+              onCancel={closeTireModal}
+              label={editingTireId ? 'Salvar alterações' : 'Salvar pneu'}
+              v="primary"
+            />
           </form>
         </Modal>
       )}
 
       {showMaintenanceModal && (
-        <Modal wide title="Lançar manutenção" onClose={() => setShowMaintenanceModal(false)}>
-          <form onSubmit={handleCreateMaintenance} className="space-y-3">
+        <Modal
+          wide
+          title={editingMaintId ? 'Editar manutenção' : 'Lançar manutenção'}
+          onClose={closeMaintenanceModal}
+        >
+          <form
+            onSubmit={editingMaintId ? handleUpdateMaintenance : handleCreateMaintenance}
+            className="space-y-3"
+          >
             <Field label="Veículo">
               <select
                 required
@@ -1165,7 +1450,10 @@ export const GlobalModals: React.FC = () => {
             {(() => {
               const vv = vehicles.find((v) => v.id === maintenanceForm.veiculoId);
               if (!vv) return null;
-              const chk = maintenanceForm.km !== '' ? checkMaintenanceKm(maintenanceForm) : null;
+              const chk =
+                maintenanceForm.km !== ''
+                  ? checkMaintenanceKm(maintenanceForm, editingMaintId)
+                  : null;
               if (chk && chk.erro)
                 return (
                   <div
@@ -1247,16 +1535,20 @@ export const GlobalModals: React.FC = () => {
               </Field>
             </div>
             <FormActions
-              onCancel={() => setShowMaintenanceModal(false)}
-              label="Salvar manutenção"
+              onCancel={closeMaintenanceModal}
+              label={editingMaintId ? 'Salvar alterações' : 'Salvar manutenção'}
             />
           </form>
         </Modal>
       )}
 
       {showFuelModal && (
-        <Modal wide title="Lançar abastecimento" onClose={() => setShowFuelModal(false)}>
-          <form onSubmit={handleCreateFuel} className="space-y-3">
+        <Modal
+          wide
+          title={editingFuelId ? 'Editar abastecimento' : 'Lançar abastecimento'}
+          onClose={closeFuelModal}
+        >
+          <form onSubmit={editingFuelId ? handleUpdateFuel : handleCreateFuel} className="space-y-3">
             <Field label="Veículo abastecido">
               <select
                 required
@@ -1350,7 +1642,7 @@ export const GlobalModals: React.FC = () => {
             {(() => {
               const vv = vehicles.find((v) => v.id === fuelForm.veiculoId);
               if (!vv) return null;
-              const chk = fuelForm.km !== '' ? checkFuelKm(fuelForm) : null;
+              const chk = fuelForm.km !== '' ? checkFuelKm(fuelForm, editingFuelId) : null;
               if (chk && chk.erro)
                 return (
                   <div
@@ -1362,7 +1654,13 @@ export const GlobalModals: React.FC = () => {
                   </div>
                 );
               const comb = fuelings
-                .filter((f) => f.veiculoId === vv.id && f.tipo !== 'Arla' && f.data <= fuelForm.data)
+                .filter(
+                  (f) =>
+                    f.veiculoId === vv.id &&
+                    f.id !== editingFuelId &&
+                    f.tipo !== 'Arla' &&
+                    f.data <= fuelForm.data
+                )
                 .sort(cmpFuel);
               const ant = comb[comb.length - 1];
               const km = Number(fuelForm.km);
@@ -1395,8 +1693,8 @@ export const GlobalModals: React.FC = () => {
               />
             </Field>
             <FormActions
-              onCancel={() => setShowFuelModal(false)}
-              label="Salvar abastecimento"
+              onCancel={closeFuelModal}
+              label={editingFuelId ? 'Salvar alterações' : 'Salvar abastecimento'}
               v="primary"
             />
           </form>
@@ -1404,8 +1702,12 @@ export const GlobalModals: React.FC = () => {
       )}
 
       {showFineModal && (
-        <Modal wide title="Lançar multa" onClose={() => setShowFineModal(false)}>
-          <form onSubmit={handleCreateFine} className="space-y-3">
+        <Modal
+          wide
+          title={editingFineId ? 'Editar multa' : 'Lançar multa'}
+          onClose={closeFineModal}
+        >
+          <form onSubmit={editingFineId ? handleUpdateFine : handleCreateFine} className="space-y-3">
             <Field label="Veículo">
               <select
                 required
@@ -1524,7 +1826,11 @@ export const GlobalModals: React.FC = () => {
                 gera pontos na CNH.
               </div>
             )}
-            <FormActions onCancel={() => setShowFineModal(false)} label="Salvar multa" v="danger" />
+            <FormActions
+              onCancel={closeFineModal}
+              label={editingFineId ? 'Salvar alterações' : 'Salvar multa'}
+              v="danger"
+            />
           </form>
         </Modal>
       )}

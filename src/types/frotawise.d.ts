@@ -89,6 +89,7 @@ export interface Veiculo {
   categoria: string;
   eixos: number;
   kmAtual: number;
+  kmBase?: number | null;
   status: StatusVeiculo;
 }
 
@@ -141,11 +142,18 @@ export interface Abastecimento {
   fornecedor: string;
 }
 
+export interface KmAtualLancado {
+  km: number;
+  data: string | null;
+  origem: string;
+}
+
 export interface AlertaPreventivaItem {
   v: Veiculo;
   r: RegraManutencaoPreventiva;
   ultimo: Manutencao | null;
   proximo: number | null;
   restante: number | null;
+  atual: KmAtualLancado;
   status: 'sem' | 'vencida' | 'proxima' | 'ok';
 }

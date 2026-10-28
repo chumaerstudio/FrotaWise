@@ -20,7 +20,11 @@ export default function CustosMultasPage() {
     totalMaintenanceCost,
     totalFinesCost,
     setShowMaintenanceModal,
+    startEditMaint,
+    handleDeleteMaintenance,
     setShowFineModal,
+    startEditFine,
+    handleDeleteFine,
   } = useEstoquePneus();
 
   const [expenseSubTab, setExpenseSubTab] = useState<'maintenances' | 'fines'>('maintenances');
@@ -76,6 +80,7 @@ export default function CustosMultasPage() {
                     <th>Descrição</th>
                     <th>Oficina</th>
                     <th className="ef-tr">Valor</th>
+                    <th className="ef-tr">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -104,7 +109,8 @@ export default function CustosMultasPage() {
                           </Chip>
                           {m.categoria && (
                             <div className="ef-t12 mt-1" style={{ color: 'var(--mute)' }}>
-                              {m.categoria}{m.peca ? ` · ${m.peca}` : ''}
+                              {m.categoria}
+                              {m.peca ? ` · ${m.peca}` : ''}
                             </div>
                           )}
                         </td>
@@ -116,6 +122,18 @@ export default function CustosMultasPage() {
                         <td style={{ maxWidth: 320 }}>{m.descricao}</td>
                         <td style={{ color: 'var(--ink2)' }}>{m.fornecedor}</td>
                         <td className="mono text-right font-bold">{formatCurrency(m.valor)}</td>
+                        <td className="text-right whitespace-nowrap ef-sx15">
+                          <Btn sm onClick={() => startEditMaint(m)}>
+                            Editar
+                          </Btn>
+                          <Btn
+                            sm
+                            className="ef-del"
+                            onClick={() => handleDeleteMaintenance(m)}
+                          >
+                            Excluir
+                          </Btn>
+                        </td>
                       </tr>
                     );
                   })}
@@ -140,6 +158,7 @@ export default function CustosMultasPage() {
                   <th>Motorista</th>
                   <th className="ef-tc">Status</th>
                   <th className="ef-tr">Valor</th>
+                  <th className="ef-tr">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,6 +195,14 @@ export default function CustosMultasPage() {
                             {formatCurrency(f.valorNIC || 0)}
                           </div>
                         )}
+                      </td>
+                      <td className="text-right whitespace-nowrap ef-sx15">
+                        <Btn sm onClick={() => startEditFine(f)}>
+                          Editar
+                        </Btn>
+                        <Btn sm className="ef-del" onClick={() => handleDeleteFine(f)}>
+                          Excluir
+                        </Btn>
                       </td>
                     </tr>
                   );

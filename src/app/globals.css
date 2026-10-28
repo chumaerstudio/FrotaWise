@@ -211,3 +211,5 @@
 @media (max-width:1280px){.ef-g-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:640px){.ef-g-3{grid-template-columns:minmax(0,1fr)}}
 .ef .ef-t40{font-size:40px}
+
+.ef .btn.ef-del{color:var(--red-ink);border-color:var(--red-soft)}.ef .btn.ef-del:hover{background:var(--red-soft)}

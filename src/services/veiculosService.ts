@@ -1,4 +1,12 @@
-import { Manutencao, Multa, Veiculo } from '@/types/frotawise';
+import {
+  Abastecimento,
+  Manutencao,
+  Multa,
+  Pneu,
+  RegraManutencaoPreventiva,
+  Veiculo,
+} from '@/types/frotawise';
+import { normTxt } from './pneusService';
 
 export const INITIAL_VEHICLES: Veiculo[] = [
   {
@@ -40,6 +48,7 @@ export const INITIAL_MAINTENANCES: Manutencao[] = [
     veiculoId: 'v1',
     tipo: 'Preventiva',
     categoria: 'Motor',
+    peca: '',
     km: 180000,
     descricao: 'Troca de kit filtros, óleo motor sintético e revisão freios',
     fornecedor: 'Oficina Rede Diesel Sul',
@@ -52,6 +61,7 @@ export const INITIAL_MAINTENANCES: Manutencao[] = [
     veiculoId: 'v2',
     tipo: 'Corretiva',
     categoria: 'Freio',
+    peca: '',
     km: 240000,
     descricao: 'Substituição de válvula APU e alinhamento de 3 eixos',
     fornecedor: 'TruckCenter BR-116',
@@ -64,6 +74,7 @@ export const INITIAL_MAINTENANCES: Manutencao[] = [
     veiculoId: 'v3',
     tipo: 'Pneus / Recapagem',
     categoria: 'Suspensão',
+    peca: '',
     km: 95000,
     descricao: 'Reforma de 2 carcaças 295/80 banda Vipal',
     fornecedor: 'Recapadora Nacional',
@@ -142,10 +153,6 @@ export const getVehicleChassisSlots = (eixosCount: number) => {
   return { spareSlot: { code: 'ESTEPE-1', label: 'Estepe Chassi' }, axles };
 };
 
-
-import { Abastecimento, RegraManutencaoPreventiva } from '@/types/frotawise';
-import { normTxt } from './pneusService';
-
 export const cmpFuel = (a: Abastecimento, b: Abastecimento) =>
   a.data < b.data ? -1 : a.data > b.data ? 1 : Number(a.km) - Number(b.km);
 
@@ -189,4 +196,63 @@ export const matchesPreventiveRule = (
     normTxt(m.peca).includes(alvo) ||
     normTxt(m.descricao).includes(alvo)
   );
+};
+
+export const vehicleLaunchKms = (
+  vehId: string,
+  fuelings: Abastecimento[],
+  maintenances: Manutencao[]
+) =>
+  [
+    ...fuelings.filter((f) => f.veiculoId === vehId).map((f) => Number(f.km)),
+    ...maintenances
+      .filter((m) => m.veiculoId === vehId && m.km !== null && m.km !== undefined)
+      .map((m) => Number(m.km)),
+  ].filter((n) => Number.isFinite(n));
+
+export const baseKmOf = (v: Veiculo) =>
+  v.kmBase !== undefined && v.kmBase !== null
+    ? Number(v.kmBase)
+    : INITIAL_VEHICLES.find((x) => x.id === v.id)?.kmAtual ?? null;
+
+export const odometerFrom = (v: Veiculo, kms: number[]) => {
+  const b = baseKmOf(v);
+  const all = b === null ? kms : [...kms, b];
+  return all.length ? Math.max(...all) : Number(v.kmAtual) || 0;
+};
+
+export const applyOdometer = (
+  vehs: Veiculo[],
+  tirs: Pneu[],
+  vehId: string,
+  novo: number,
+  obs: string,
+  data: string
+) => {
+  const veh = vehs.find((v) => v.id === vehId);
+  if (!veh) return { vehs, tirs };
+  const delta = novo - (Number(veh.kmAtual) || 0);
+  if (!delta) return { vehs, tirs };
+  return {
+    vehs: vehs.map((v) => (v.id === vehId ? { ...v, kmAtual: novo } : v)),
+    tirs: tirs.map((t) =>
+      t.veiculoAtualId === vehId && t.posicaoAtual !== 'ESTEPE-1'
+        ? {
+            ...t,
+            kmTotal: Math.max(0, (Number(t.kmTotal) || 0) + delta),
+            historicoVeiculos: [
+              ...(t.historicoVeiculos || []),
+              {
+                id: `h-${Date.now()}-${t.id}`,
+                placa: veh.placa,
+                modelo: veh.modelo,
+                kmRodados: delta,
+                data,
+                obs,
+              },
+            ],
+          }
+        : t
+    ),
+  };
 };

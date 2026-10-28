@@ -170,7 +170,7 @@ export default function MalhaPneusConfigPage() {
       )
     ) {
       showToast(
-        'Já existe um limite para este modelo, categoria e peça. Edite o existente.',
+        'Já existe um limite para este modelo, categoria e serviço. Edite o existente.',
         'error'
       );
       return;
@@ -467,7 +467,7 @@ export default function MalhaPneusConfigPage() {
       <div className="card ef-rise" style={{ animationDelay: '200ms' }}>
         <SectionHead
           title="Manutenção preventiva por categoria"
-          sub="Defina de quantos em quantos KM cada peça precisa de manutenção preventiva. Os avisos aparecem na Visão geral."
+          sub="Defina de quantos em quantos KM cada serviço precisa de manutenção preventiva. Os avisos aparecem na Visão geral."
         />
         <datalist id="ef-pecas-cfg">
           {[
@@ -514,12 +514,12 @@ export default function MalhaPneusConfigPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Peça">
+            <Field label="Serviço">
               <input
                 required
                 list="ef-pecas-cfg"
                 className="inp"
-                placeholder="Ex: Pastilhas de freio"
+                placeholder="Ex: Troca de pastilhas de freio"
                 value={maintRuleForm.peca}
                 onChange={(e) => setMaintRuleForm({ ...maintRuleForm, peca: e.target.value })}
               />
@@ -537,9 +537,10 @@ export default function MalhaPneusConfigPage() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="ef-t12_5" style={{ color: 'var(--mute)' }}>
-              O limite vale para os veículos do modelo escolhido. O aviso conta a partir do KM da
-              última manutenção com a mesma categoria e peça. &quot;Próxima&quot; aparece quando
-              faltar 10% do intervalo (mínimo 500 km).
+              O limite vale para os veículos do modelo escolhido. O alerta aparece na Visão geral
+              quando faltarem 500 km para o limite, contando a partir do KM da última manutenção
+              com a mesma categoria e serviço. O KM atual do veículo é o do último lançamento de
+              quilometragem (manutenção ou abastecimento).
             </span>
             <div className="flex gap-2">
               {editingMaintRuleId && (
@@ -574,7 +575,7 @@ export default function MalhaPneusConfigPage() {
                 <tr>
                   <th>Modelo</th>
                   <th>Categoria</th>
-                  <th>Peça</th>
+                  <th>Serviço</th>
                   <th className="ef-tr">A cada</th>
                   <th>Situação da frota</th>
                   <th className="ef-tr">Ações</th>

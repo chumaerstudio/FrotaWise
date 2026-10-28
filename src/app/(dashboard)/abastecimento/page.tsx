@@ -20,6 +20,8 @@ export default function AbastecimentoPage() {
     fuelMedias,
     fuelStats,
     setShowFuelModal,
+    startEditFuel,
+    handleDeleteFuel,
   } = useEstoquePneus();
 
   return (
@@ -98,6 +100,7 @@ export default function AbastecimentoPage() {
                   <th className="ef-tr">KM</th>
                   <th className="ef-tr">Média</th>
                   <th>Fornecedor</th>
+                  <th className="ef-tr">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,6 +127,14 @@ export default function AbastecimentoPage() {
                         {med ? `${formatDec(med.media)} km/l` : '—'}
                       </td>
                       <td style={{ color: 'var(--ink2)' }}>{f.fornecedor}</td>
+                      <td className="text-right whitespace-nowrap ef-sx15">
+                        <Btn sm onClick={() => startEditFuel(f)}>
+                          Editar
+                        </Btn>
+                        <Btn sm className="ef-del" onClick={() => handleDeleteFuel(f)}>
+                          Excluir
+                        </Btn>
+                      </td>
                     </tr>
                   );
                 })}
