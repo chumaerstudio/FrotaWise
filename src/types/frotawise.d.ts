@@ -28,9 +28,14 @@ export interface RegraModeloPneu {
 }
 
 export interface RegrasGeraisPneu {
-  sulcoMinimoMm: number;
-  maxRecapagens: number;
-  alertaProximidadeKm: number;
+  sulcoMinimoMm?: number;
+  maxRecapagens?: number;
+  alertaProximidadeKm?: number;
+  kmRecaparPadrao?: number;
+  kmSucatearPadrao?: number;
+  msgRecapar: string;
+  msgSucatear: string;
+  [key: string]: unknown;
 }
 
 export interface RegraManutencaoPreventiva {
@@ -166,7 +171,7 @@ export interface AlertaPreventivaItem {
 
 export interface AlertaRemold {
   tire: Pneu;
-  tipo: 'recapar' | 'sucatear' | 'atencao';
+  tipo: 'Sucatear' | 'Recapar' | 'Atencao' | 'sucatear' | 'recapar' | 'atencao';
   localLabel: string;
   instrucao: string;
   motivo: string;
