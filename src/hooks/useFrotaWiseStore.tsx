@@ -233,8 +233,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
 
   const tireAlerts = useMemo<AlertaRemold[]>(() => {
     const alerts: AlertaRemold[] = [];
-    const r = company.regrasPneus;
-    tires.forEach((t) => {
+    const r = company?.regrasPneus ?? { sulcoMinimoMm: 3, maxRecapagens: 3, alertaProximidadeKm: 1000 };    tires.forEach((t) => {
       const lim = getTireLimits(t, company);
       const veh = vehicles.find((v) => v.id === t.veiculoAtualId);
       const localLabel = veh
