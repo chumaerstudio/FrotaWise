@@ -284,18 +284,15 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   }, [tires, vehicles, company]);
 
   const totalMaintenanceCost = useMemo(
-    () => maintenances.reduce((a, m) => a + (Number(m.valor) || 0), 0),
-    [maintenances]
+  () => (maintenances ?? []).reduce((a, m) => a + (Number(m.valor) || 0), 0),    [maintenances]
   );
 
   const totalFinesCost = useMemo(
-    () => fines.reduce((a, f) => a + (Number(f.valor) || 0), 0),
-    [fines]
+  () => (fines ?? []).reduce((a, f) => a + (Number(f.valor) || 0), 0),    [fines]
   );
 
   const totalStockTires = useMemo(
-    () => tires.filter((t) => !t.veiculoAtualId && t.classificacao !== 'Sucatear'),
-    [tires]
+  () => (tires ?? []).filter((t) => !t.veiculoAtualId && t.classificacao !== 'Sucatear'),    [tires]
   );
 
   const expensesByVehicleData = useMemo(
