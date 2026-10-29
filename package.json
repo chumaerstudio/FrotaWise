@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "audit:ci": "npm audit --omit=dev --audit-level=high",
-    "ci:check": "npm run lint && npm run type-check && npm run test && npm run build"
+    "ci:check": "npm run lint && npm run type-check && npm run test && npm run build",
+    "mock:api": "node mock-backend/server.mjs"
   },
   "dependencies": {
     "axios": "^1.7.7",

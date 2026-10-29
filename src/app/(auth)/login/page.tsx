@@ -6,16 +6,35 @@ import { useAuth } from '@/hooks/useAuth';
 import { LOGO_FROTAWISE } from '@/services/api';
 import { Btn, Field } from '@/components/ui';
 
+/** Aceita apenas caminhos internos (evita open redirect via ?redirect=). */
+function resolveRedirectTarget(): string {
+  if (typeof window === 'undefined') return '/';
+  const target = new URLSearchParams(window.location.search).get('redirect');
+  if (target && target.startsWith('/') && !target.startsWith('//')) {
+    return target;
+  }
+  return '/';
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
-  const [email, setEmail] = useState('gestao@ecofrota.com.br');
-  const [senha, setSenha] = useState('••••••••');
+  const { login, erro } = useAuth();
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email);
-    router.push('/');
+    if (enviando) return;
+
+    setEnviando(true);
+    const ok = await login(email.trim(), senha);
+    setEnviando(false);
+
+    if (ok) {
+      router.push(resolveRedirectTarget());
+      router.refresh();
+    }
   };
 
   return (
@@ -35,6 +54,8 @@ export default function LoginPage() {
             <input
               type="email"
               required
+              autoComplete="username"
+              placeholder="voce@empresa.com.br"
               className="inp"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -44,13 +65,19 @@ export default function LoginPage() {
             <input
               type="password"
               required
+              autoComplete="current-password"
               className="inp"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
             />
           </Field>
-          <Btn type="submit" v="primary" className="w-full ef-py3">
-            Entrar no Painel FrotaWise
+          {erro && (
+            <p role="alert" className="ef-t13" style={{ color: '#8F2A22' }}>
+              {erro}
+            </p>
+          )}
+          <Btn type="submit" v="primary" className="w-full ef-py3" disabled={enviando}>
+            {enviando ? 'Entrando…' : 'Entrar no Painel FrotaWise'}
           </Btn>
         </form>
       </div>

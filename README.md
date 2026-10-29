@@ -72,3 +72,19 @@ npm run dev
 # 3. Validar tipagem TypeScript
 npm run type-check
 ```
+
+## Login em desenvolvimento (sem banco de dados)
+
+O frontend não valida credenciais: quem autentica é o backend em `BACKEND_API_URL`.
+Enquanto o backend real não existe, use o mock incluído:
+
+```bash
+cp .env.example .env.local     # NEXT_PUBLIC_APP_MODE=API, BACKEND_API_URL=http://127.0.0.1:8000/v1
+npm run mock:api               # terminal 1 — sobe o mock em :8000
+npm run dev                    # terminal 2
+```
+
+Credenciais padrão do mock: `gestao@ecofrota.com.br` / `frotawise123`
+(sobrescreva com `MOCK_EMAIL` e `MOCK_PASSWORD`). Não use o mock em produção.
+
+Alternativa sem login: `NEXT_PUBLIC_APP_MODE=DEMO` no `.env.local` (bloqueado em build de produção).
