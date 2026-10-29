@@ -1,0 +1,85 @@
+openapi: 3.1.0
+info:
+  title: FrotaWise Enterprise API — Contrato Alinhado ao Snapshot FE 3.5.0
+  version: 3.5.0-draft.1
+  description: >
+    Especificacao de contrato compartilhado entre Frontend Next.js (BFF) e Backend FastAPI.
+    Rotas marcadas com [PROPOSTO] exigem adendo ao Backend v3.1 antes da migration BE-02.
+paths:
+  /v1/auth/login:
+    post:
+      summary: Autenticacao individual de operador/gestor
+      responses:
+        '200':
+          description: Sessao criada com sucesso
+        '401':
+          description: Credenciais invalidas
+        '403':
+          description: Bloqueado por RBAC ou IP
+  /v1/auth/logout:
+    post:
+      summary: Revogacao idempotente da sessao atual
+      responses:
+        '200':
+          description: Sessao encerrada
+  /v1/auth/me:
+    get:
+      summary: Retorna identidade, tenant e capabilities do usuario autenticado
+      responses:
+        '200':
+          description: Identidade verificada
+        '401':
+          description: Sessao expirada ou revogada
+  /v1/veiculos:
+    get:
+      summary: Lista veiculos do tenant autenticado
+      responses:
+        '200':
+          description: Lista de VeiculoApiDTO
+    post:
+      summary: Cadastra veiculo (2 a 6 eixos homologados)
+      responses:
+        '201':
+          description: Veiculo criado
+  /v1/pneus:
+    get:
+      summary: Lista pneus do tenant autenticado
+      responses:
+        '200':
+          description: Lista de PneuApiDTO
+  /v1/abastecimentos:
+    get:
+      summary: "[PROPOSTO] Lista lancamentos de Diesel, Gasolina e Arla"
+      responses:
+        '200':
+          description: Lista de AbastecimentoApiDTO
+    post:
+      summary: "[PROPOSTO] Registra abastecimento transacional com Idempotency-Key"
+      responses:
+        '201':
+          description: Abastecimento persistido e hodometro reconciliado no servidor
+  /v1/empresa/regras-manutencao:
+    get:
+      summary: "[PROPOSTO] Lista regras de manutencao preventiva por modelo/categoria/peca/km"
+      responses:
+        '200':
+          description: Lista de RegraManutencaoPreventiva
+    post:
+      summary: "[PROPOSTO] Cria regra preventiva validando unicidade por tenant"
+      responses:
+        '201':
+          description: Regra criada
+        '409':
+          description: Regra duplicada
+  /v1/dashboard/resumo:
+    get:
+      summary: "[PROPOSTO ADENDO fuelStats] Resumo agregado por tenant"
+      responses:
+        '200':
+          description: DashboardResumoApiDTO
+  /v1/dashboard/preventivas:
+    get:
+      summary: "[PROPOSTO] Lista alertas de preventiva (sem, vencida, proxima, ok)"
+      responses:
+        '200':
+          description: Lista de AlertaPreventivaApiDTO

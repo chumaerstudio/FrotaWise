@@ -1,14 +1,21 @@
+export type StatusVeiculo = 'Ativo' | 'Manutencao' | 'Inativo';
+
 export type ClassificacaoPneu = 'Rodando' | 'Estocar' | 'Recapar' | 'Sucatear';
 
-export type TipoOperacaoPneu = 'Mount' | 'Estocar' | 'Recapar' | 'Sucatear' | 'AddKm';
+export type TipoOperacaoPneu =
+  | 'Mount'
+  | 'Estocar'
+  | 'Recapar'
+  | 'Sucatear'
+  | 'AddKm';
 
-export type StatusVeiculo = 'Operando' | 'Manutenção';
+export type TipoCombustivel = 'Diesel' | 'Gasolina' | 'Arla';
 
-export type StatusMulta = 'Pendente' | 'Paga' | 'Em Recurso';
+export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Preditiva';
 
-export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Pneus / Recapagem';
+export type StatusMulta = 'Pendente' | 'Paga' | 'Recorrida' | 'Cancelada';
 
-export type TipoCombustivel = 'Gasolina' | 'Arla' | 'Diesel';
+export type PapelUsuario = 'ADMIN' | 'OPERADOR' | 'DIRETOR';
 
 export interface RegraModeloPneu {
   id: string;
@@ -20,6 +27,12 @@ export interface RegraModeloPneu {
   kmSucata: number;
 }
 
+export interface RegrasGeraisPneu {
+  sulcoMinimoMm: number;
+  maxRecapagens: number;
+  alertaProximidadeKm: number;
+}
+
 export interface RegraManutencaoPreventiva {
   id: string;
   modelo: string;
@@ -28,40 +41,39 @@ export interface RegraManutencaoPreventiva {
   km: number;
 }
 
-export interface RegrasGeraisPneus {
-  kmEstocar: number;
-  kmRecapar: number;
-  kmSucatear: number;
-  msgEstocar: string;
-  msgRecapar: string;
-  msgSucatear: string;
-}
-
 export interface EmpresaConfig {
   nomeEmpresa: string;
   cnpj: string;
   logoUrl: string;
   regrasModelos: RegraModeloPneu[];
+  regrasPneus: RegrasGeraisPneu;
   regrasManutencao: RegraManutencaoPreventiva[];
-  regrasPneus: RegrasGeraisPneus;
 }
 
-export interface HistoricoVeiculoPneu {
-  id: string;
-  placa: string;
-  modelo: string;
-  kmRodados: number;
-  data: string;
-  obs: string;
+export interface HistoricoPneu {
+  id?: string;
+  veiculoId: string;
+  placa?: string;
+  posicao: string;
+  dataMontagem: string;
+  dataRetirada?: string | null;
+  kmInstalacao?: number;
+  kmRetirada?: number | null;
+  kmRodado: number;
+  motivo?: string;
+  autorId?: string;
 }
 
 export interface ReformaPneu {
-  id: string;
-  data: string;
+  id?: string;
   ciclo: number;
-  tipoBanda: string;
+  dataEnvio: string;
+  dataRetorno?: string | null;
   fornecedor: string;
+  tipoBanda: string;
   valor: number;
+  kmNoEnvio: number;
+  concluida: boolean;
 }
 
 export interface Pneu {
@@ -77,7 +89,7 @@ export interface Pneu {
   posicaoAtual: string;
   localEstoque: string;
   tipoBanda?: string;
-  historicoVeiculos: HistoricoVeiculoPneu[];
+  historicoVeiculos: HistoricoPneu[];
   reformas?: ReformaPneu[];
 }
 
@@ -93,14 +105,6 @@ export interface Veiculo {
   status: StatusVeiculo;
 }
 
-export interface AlertaRemold {
-  tire: Pneu;
-  tipo: 'Sucatear' | 'Recapar' | 'Estocar';
-  localLabel: string;
-  instrucao: string;
-  motivo: string;
-}
-
 export interface Manutencao {
   id: string;
   osNumero: string;
@@ -108,7 +112,7 @@ export interface Manutencao {
   tipo: TipoManutencao;
   categoria?: string;
   peca?: string;
-  km?: number | null;
+  km?: number;
   descricao: string;
   fornecedor: string;
   data: string;
@@ -144,16 +148,26 @@ export interface Abastecimento {
 
 export interface KmAtualLancado {
   km: number;
-  data: string | null;
-  origem: string;
+  data: string;
+  origem: 'manutencao' | 'abastecimento' | 'operacao' | 'kmBase';
 }
+
+export type StatusAlertaPreventiva = 'sem' | 'vencida' | 'proxima' | 'ok';
 
 export interface AlertaPreventivaItem {
   v: Veiculo;
   r: RegraManutencaoPreventiva;
   ultimo: Manutencao | null;
-  proximo: number | null;
-  restante: number | null;
+  proximo: number;
+  restante: number;
   atual: KmAtualLancado;
-  status: 'sem' | 'vencida' | 'proxima' | 'ok';
+  status: StatusAlertaPreventiva;
+}
+
+export interface AlertaRemold {
+  tire: Pneu;
+  tipo: 'recapar' | 'sucatear' | 'atencao';
+  localLabel: string;
+  instrucao: string;
+  motivo: string;
 }

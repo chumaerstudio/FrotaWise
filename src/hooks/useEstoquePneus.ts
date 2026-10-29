@@ -1,101 +1,54 @@
-'use client';
+import { useMemo } from 'react';
+import type { Pneu, ClassificacaoPneu } from '@/types/frotawise';
+import { useFrotaWiseStore } from '@/hooks/useFrotaWiseStore';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Pneu, StatusPneu } from '@/types/frotawise';
-import { pneusService } from '@/services/pneusService';
-
+/**
+ * @deprecated Hook legado do Snapshot 3.5.0 mantido com adaptador tipado
+ * para evitar quebra de importações. Use diretamente os seletores de pneus.
+ */
 export function useEstoquePneus() {
-  const [pneus, setPneus] = useState<Pneu[]>([]);
-  const [carregando, setCarregando] = useState<boolean>(true);
-  const [filtroStatus, setFiltroStatus] = useState<StatusPneu | 'TODOS'>('TODOS');
-  const [termoBusca, setTermoBusca] = useState<string>('');
-  const [mensagemOperacao, setMensagemOperacao] = useState<string | null>(null);
+  const { tires, vehicles } = useFrotaWiseStore();
 
-  const carregarEstoque = useCallback(async () => {
-    setCarregando(true);
-    const dados = await pneusService.listarPneus();
-    setPneus(dados);
-    setCarregando(false);
-  }, []);
+  const pneusNormalizados = useMemo(() => {
+    const placaPorVeiculoId = new Map<string, string>(
+      vehicles.map((v) => [v.id, v.placa])
+    );
 
-  useEffect(() => {
-    carregarEstoque();
-  }, [carregarEstoque]);
+    return tires.map((pneu: Pneu) => ({
+      ...pneu,
+      numeroFogo: pneu.fogo,
+      status: pneu.classificacao as ClassificacaoPneu,
+      veiculoPlaca: pneu.veiculoAtualId
+        ? placaPorVeiculoId.get(pneu.veiculoAtualId) ?? null
+        : null,
+    }));
+  }, [tires, vehicles]);
 
-  const pneusFiltrados = useMemo(() => {
-    return pneus.filter((pneu) => {
-      const correspondeStatus = filtroStatus === 'TODOS' || pneu.status === filtroStatus;
-      const correspondeBusca =
-        termoBusca.trim() === '' ||
-        pneu.numeroFogo.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        pneu.marca.toLowerCase().includes(termoBusca.toLowerCase()) ||
-        (pneu.veiculoPlaca && pneu.veiculoPlaca.toLowerCase().includes(termoBusca.toLowerCase()));
-      return correspondeStatus && correspondeBusca;
-    });
-  }, [pneus, filtroStatus, termoBusca]);
+  const pneusEmEstoque = useMemo(
+    () => pneusNormalizados.filter((p) => p.classificacao === 'Estocar'),
+    [pneusNormalizados]
+  );
 
-  const dispararRemold = useCallback(async (pneuId: string) => {
-    const resposta = await pneusService.enviarParaRemold(pneuId);
-    if (resposta.sucesso) {
-      setPneus((estadoAnterior) =>
-        estadoAnterior.map((p) =>
-          p.id === pneuId
-            ? {
-                ...p,
-                status: 'EM_REMOLD',
-                veiculoId: undefined,
-                veiculoPlaca: undefined,
-                posicaoEixo: undefined,
-              }
-            : p
-        )
-      );
-      setMensagemOperacao(`Ordem de Remold gerada com sucesso! Protocolo: ${resposta.protocolo}`);
-      setTimeout(() => setMensagemOperacao(null), 5000);
-    }
-  }, []);
+  const pneusRodando = useMemo(
+    () => pneusNormalizados.filter((p) => p.classificacao === 'Rodando'),
+    [pneusNormalizados]
+  );
 
-  const alocarEmVeiculo = useCallback(
-    async (pneuId: string, veiculoPlaca: string, posicaoCodigo: string) => {
-      const resposta = await pneusService.alocarPneu({
-        pneuId,
-        veiculoId: veiculoPlaca,
-        posicaoCodigo,
-        odometroVeiculoKm: 285000,
-        pressaoInicialPsi: 112,
-      });
+  const pneusEmReforma = useMemo(
+    () => pneusNormalizados.filter((p) => p.classificacao === 'Recapar'),
+    [pneusNormalizados]
+  );
 
-      if (resposta.sucesso) {
-        setPneus((estadoAnterior) =>
-          estadoAnterior.map((p) =>
-            p.id === pneuId
-              ? {
-                  ...p,
-                  status: 'EM_USO',
-                  veiculoPlaca,
-                  posicaoEixo: posicaoCodigo,
-                }
-              : p
-          )
-        );
-        setMensagemOperacao(resposta.mensagem);
-        setTimeout(() => setMensagemOperacao(null), 5000);
-      }
-    },
-    []
+  const pneusSucata = useMemo(
+    () => pneusNormalizados.filter((p) => p.classificacao === 'Sucatear'),
+    [pneusNormalizados]
   );
 
   return {
-    pneus: pneusFiltrados,
-    totalBruto: pneus.length,
-    carregando,
-    filtroStatus,
-    setFiltroStatus,
-    termoBusca,
-    setTermoBusca,
-    mensagemOperacao,
-    dispararRemold,
-    alocarEmVeiculo,
-    recarregar: carregarEstoque,
+    pneus: pneusNormalizados,
+    pneusEmEstoque,
+    pneusRodando,
+    pneusEmReforma,
+    pneusSucata,
   };
 }
