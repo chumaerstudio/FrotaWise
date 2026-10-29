@@ -2,6 +2,19 @@
 
 Arquitetura Front-End corporativa de alta escalabilidade construída com **Next.js 14 (App Router)**, **TypeScript (Strict Mode)** e **Tailwind CSS**, projetada para transportadoras e operadores logísticos de grande porte.
 
+## Requisitos e instalação
+
+O projeto aceita Node.js `>=20.11.0 <25.0.0`, incluindo Node.js 24.x, e npm `>=10`. Na primeira instalação desta atualização, execute `npm install` para sincronizar o `package-lock.json` incluído no snapshot. Em instalações futuras, após salvar o lockfile sincronizado no projeto, `npm ci` pode ser usado para uma instalação limpa.
+
+```powershell
+node -v
+npm -v
+npm install --no-audit --no-fund
+npm run dev
+```
+
+`npm ci` não atualiza o lockfile; ele falha quando as dependências declaradas e o lockfile estão fora de sincronia.
+
 ## Estrutura da Arquitetura
 
 ```text

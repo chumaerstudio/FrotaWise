@@ -1,4 +1,4 @@
-export type StatusVeiculo = 'Ativo' | 'Manutencao' | 'Inativo';
+export type StatusVeiculo = 'Ativo' | 'Manutencao' | 'Inativo' | 'Operando' | 'Manutenção';
 
 export type ClassificacaoPneu = 'Rodando' | 'Estocar' | 'Recapar' | 'Sucatear';
 
@@ -11,9 +11,9 @@ export type TipoOperacaoPneu =
 
 export type TipoCombustivel = 'Diesel' | 'Gasolina' | 'Arla';
 
-export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Preditiva';
+export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Preditiva' | 'Pneus / Recapagem';
 
-export type StatusMulta = 'Pendente' | 'Paga' | 'Recorrida' | 'Cancelada';
+export type StatusMulta = 'Pendente' | 'Paga' | 'Recorrida' | 'Cancelada' | 'Em Recurso';
 
 export type PapelUsuario = 'ADMIN' | 'OPERADOR' | 'DIRETOR';
 
@@ -28,15 +28,22 @@ export interface RegraModeloPneu {
 }
 
 export interface RegrasGeraisPneu {
+  kmEstocar: number;
+  kmRecapar: number;
+  kmSucatear: number;
+  msgEstocar: string;
+  msgRecapar: string;
+  msgSucatear: string;
   sulcoMinimoMm?: number;
   maxRecapagens?: number;
   alertaProximidadeKm?: number;
   kmRecaparPadrao?: number;
   kmSucatearPadrao?: number;
-  msgRecapar: string;
-  msgSucatear: string;
   [key: string]: unknown;
 }
+
+/** Nome plural mantido para compatibilidade com versões anteriores. */
+export type RegrasGeraisPneus = RegrasGeraisPneu;
 
 export interface RegraManutencaoPreventiva {
   id: string;
@@ -57,32 +64,47 @@ export interface EmpresaConfig {
 
 export interface HistoricoPneu {
   id?: string;
-  veiculoId: string;
+  veiculoId?: string;
   placa?: string;
-  posicao: string;
-  dataMontagem: string;
+  modelo?: string;
+  posicao?: string;
+  dataMontagem?: string;
   dataRetirada?: string | null;
   kmInstalacao?: number;
   kmRetirada?: number | null;
-  kmRodado: number;
+  kmRodado?: number;
+  /** Campos do histórico legado ainda usados no modal de pneus. */
+  kmRodados?: number;
+  data?: string;
+  obs?: string;
   motivo?: string;
   autorId?: string;
 }
 
+export type HistoricoVeiculoPneu = HistoricoPneu;
+
 export interface ReformaPneu {
   id?: string;
   ciclo: number;
-  dataEnvio: string;
+  dataEnvio?: string;
   dataRetorno?: string | null;
+  /** Campo legado usado para exibir a data da recapagem. */
+  data?: string;
   fornecedor: string;
   tipoBanda: string;
   valor: number;
-  kmNoEnvio: number;
-  concluida: boolean;
+  kmNoEnvio?: number;
+  concluida?: boolean;
 }
 
 export interface Pneu {
   id: string;
+  /** Aliases opcionais de versões anteriores da interface de pneus. */
+  numeroFogo?: string;
+  sulcoAtualMm?: number;
+  veiculoId?: string;
+  veiculoPlaca?: string;
+  posicaoEixo?: string;
   fogo: string;
   marca: string;
   medida: string;
@@ -117,7 +139,7 @@ export interface Manutencao {
   tipo: TipoManutencao;
   categoria?: string;
   peca?: string;
-  km?: number;
+  km?: number | null;
   descricao: string;
   fornecedor: string;
   data: string;
@@ -153,8 +175,8 @@ export interface Abastecimento {
 
 export interface KmAtualLancado {
   km: number;
-  data: string;
-  origem: 'manutencao' | 'abastecimento' | 'operacao' | 'kmBase';
+  data: string | null;
+  origem: 'manutencao' | 'abastecimento' | 'operacao' | 'kmBase' | 'Abastecimento' | 'Manutenção' | 'Cadastro do veículo';
 }
 
 export type StatusAlertaPreventiva = 'sem' | 'vencida' | 'proxima' | 'ok';
@@ -163,16 +185,44 @@ export interface AlertaPreventivaItem {
   v: Veiculo;
   r: RegraManutencaoPreventiva;
   ultimo: Manutencao | null;
-  proximo: number;
-  restante: number;
+  proximo: number | null;
+  restante: number | null;
   atual: KmAtualLancado;
   status: StatusAlertaPreventiva;
 }
 
 export interface AlertaRemold {
   tire: Pneu;
-  tipo: 'Sucatear' | 'Recapar' | 'Atencao' | 'sucatear' | 'recapar' | 'atencao';
+  tipo: 'Sucatear' | 'Recapar' | 'Estocar' | 'Atencao' | 'sucatear' | 'recapar' | 'atencao';
   localLabel: string;
   instrucao: string;
   motivo: string;
+}
+
+
+/** Resumo agregado usado pelo gráfico de distribuição da frota de pneus. */
+export interface ResumoDistribuicaoPneus {
+  novosPrimeiraVida: number;
+  emCicloRemold: number;
+  sucataDescarte: number;
+  emEstoquePronto: number;
+  economiaGeradaRemoldReais: number;
+  totalAtivos: number;
+}
+
+/** Contrato legado do modal de retirada, mantido para compatibilidade. */
+export type MotivoRetiradaPneu =
+  | 'ENVIO_REMOLD'
+  | 'RODIZIO'
+  | 'FURO_REPARO'
+  | 'DESCARTE_SUCATA';
+
+export interface PayloadRetiradaPneu {
+  pneuId: string;
+  veiculoId: string;
+  odometroRetiradaKm: number;
+  sulcoMedidoMm: number;
+  motivo: MotivoRetiradaPneu;
+  fornecedorDestino: string;
+  observacoesTecnicas: string;
 }

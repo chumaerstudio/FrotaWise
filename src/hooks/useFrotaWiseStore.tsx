@@ -21,12 +21,12 @@ import {
   INITIAL_VEHICLES,
   applyOdometer,
   cmpFuel,
-  computeFuelMedias,
-  matchesPreventiveRule,
+  computeFuelMediaDetails,
   odometerFrom,
   vehicleLaunchKms,
 } from '@/services/veiculosService';
 import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
+import { normalizeStoredValue } from '@/lib/storage';
 
 interface TireActionModalState {
   tire: Pneu;
@@ -152,8 +152,8 @@ function useLocalState<T>(
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        setState(normalize ? normalize(parsed) : parsed);
+        const parsed: unknown = JSON.parse(raw);
+        setState(normalizeStoredValue(parsed, initial, normalize));
       }
     } catch {
       // ignore
@@ -297,7 +297,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
 
   const expensesByVehicleData = useMemo(
     () =>
-      vehicles.map((v) => ({
+      (Array.isArray(vehicles) ? vehicles : []).map((v) => ({
         placa: v.placa,
         Manutencao: maintenances
           .filter((m) => m.veiculoId === v.id)
@@ -309,18 +309,18 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     [vehicles, maintenances, fines]
   );
 
-  const fuelMedias = useMemo(() => computeFuelMedias(fuelings), [fuelings]);
+  const fuelMedias = useMemo(() => computeFuelMediaDetails(fuelings), [fuelings]);
 
   const fuelRows = useMemo(
     () =>
-      [...fuelings].sort((a, b) =>
+      [...(Array.isArray(fuelings) ? fuelings : [])].sort((a, b) =>
         a.data < b.data ? 1 : a.data > b.data ? -1 : Number(b.km) - Number(a.km)
       ),
     [fuelings]
   );
 
   const fuelStats = useMemo(() => {
-    const porVeiculo = vehicles
+    const porVeiculo = (Array.isArray(vehicles) ? vehicles : [])
       .map((v) => {
         const comMedia = fuelings
           .filter((f) => f.veiculoId === v.id && f.tipo !== 'Arla' && fuelMedias[f.id])
@@ -349,7 +349,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   }, [fuelings, fuelMedias, vehicles]);
 
   const maintByCategory = useMemo(() => {
-    const base = CATEGORIAS_MANUTENCAO.map((k) => ({ categoria: k, valor: 0, qtd: 0 }));
+    const base: { categoria: string; valor: number; qtd: number }[] = CATEGORIAS_MANUTENCAO.map((k) => ({ categoria: k, valor: 0, qtd: 0 }));
     let sem: { categoria: string; valor: number; qtd: number } | null = null;
     maintenances.forEach((m) => {
       let alvo = base.find((b) => b.categoria === m.categoria);
@@ -357,8 +357,10 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         sem = sem || { categoria: 'Sem categoria', valor: 0, qtd: 0 };
         alvo = sem;
       }
-      alvo.valor += Number(m.valor) || 0;
-      alvo.qtd += 1;
+      if (alvo) {
+        alvo.valor += Number(m.valor) || 0;
+        alvo.qtd += 1;
+      }
     });
     return sem ? [...base, sem] : base;
   }, [maintenances]);
@@ -369,7 +371,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       const regs = [
         ...fuelings
           .filter((f) => f.veiculoId === v.id && Number.isFinite(Number(f.km)))
-          .map((f) => ({ km: Number(f.km), data: f.data, origem: 'Abastecimento' })),
+          .map((f) => ({ km: Number(f.km), data: f.data, origem: 'Abastecimento' as const })),
         ...maintenances
           .filter(
             (m) =>
@@ -378,26 +380,32 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
               m.km !== undefined &&
               Number.isFinite(Number(m.km))
           )
-          .map((m) => ({ km: Number(m.km), data: m.data, origem: 'Manutenção' })),
+          .map((m) => ({ km: Number(m.km), data: m.data, origem: 'Manutenção' as const })),
       ];
       const ult = regs.reduce<KmAtualLancado | null>(
         (a, x) => (!a || (x.data || '') > (a.data || '') || (x.data === a.data && x.km > a.km) ? x : a),
         null
       );
-      return ult || { km: Number(v.kmAtual) || 0, data: null, origem: 'Cadastro do veículo' };
+      return ult || { km: Number(v.kmAtual) || 0, data: null, origem: 'Cadastro do veículo' as const };
     };
 
-    vehicles.forEach((v) =>
-      (company.regrasManutencao || []).forEach((r) => {
+    (Array.isArray(vehicles) ? vehicles : []).forEach((v) =>
+      (company?.regrasManutencao || []).forEach((r) => {
         if (r.modelo && normTxt(r.modelo) !== normTxt(v.modelo)) return;
-        const feitos = maintenances.filter(
-          (m) =>
-            m.veiculoId === v.id &&
-            m.km !== null &&
-            m.km !== undefined &&
-            Number.isFinite(Number(m.km)) &&
-            matchesPreventiveRule(m, r)
-        );
+        const alvoPeca = normTxt(r.peca);
+        const feitos = maintenances.filter((m) => {
+          if (
+            m.veiculoId !== v.id ||
+            m.km === null ||
+            m.km === undefined ||
+            !Number.isFinite(Number(m.km)) ||
+            normTxt(m.categoria) !== normTxt(r.categoria)
+          ) return false;
+          if (!alvoPeca) return true;
+          const peca = normTxt(m.peca);
+          const descricao = normTxt(m.descricao);
+          return peca === alvoPeca || peca.includes(alvoPeca) || descricao.includes(alvoPeca);
+        });
         const ultimo = feitos.reduce<Manutencao | null>(
           (a, m) => (!a || Number(m.km) > Number(a.km) ? m : a),
           null
@@ -441,7 +449,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     let vs = vehicles;
     let ts = tires;
     const mudancas: string[] = [];
-    [...new Set(vehIds)].forEach((id) => {
+    Array.from(new Set(vehIds)).forEach((id) => {
       const v = vs.find((x) => x.id === id);
       if (!v) return;
       const antes = Number(v.kmAtual) || 0;
@@ -691,3 +699,6 @@ export function useEstoquePneus() {
   }
   return ctx;
 }
+
+/** Alias legado mantido para evitar quebra de imports entre versões do frontend. */
+export const useFrotaWiseStore = useEstoquePneus;

@@ -170,7 +170,7 @@ describe('Suíte Completa Snapshot 3.5.0 (Issues FE-02 a FE-12)', () => {
   });
 
   it('FE-11: mitiga CSV Formula Injection e rejeita abastecimento órfão no dry-run de importação', () => {
-    expect(sanitizeCsvCell('=CMD|"/C calc"!A0')).toBe("'=CMD|"/C calc"!A0");
+    expect(sanitizeCsvCell('=CMD|"/C calc"!A0')).toBe(`'=CMD|"/C calc"!A0`);
     expect(sanitizeCsvCell('+SUM(A1:A10)')).toBe("'+SUM(A1:A10)");
 
     const report = validateSnapshotDryRun({

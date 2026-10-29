@@ -704,7 +704,7 @@ export const GlobalModals: React.FC = () => {
       )}); ${qtd} pneus montados somaram o mesmo KM.`;
     }
     const med = computeFuelMedias([nf, ...fuelings])[nf.id];
-    if (med) msg += ` Média: ${formatDec(med.media)} km/l.`;
+    if (med !== null && med !== undefined) msg += ` Média: ${formatDec(med)} km/l.`;
     closeFuelModal();
     showToast(msg);
   };

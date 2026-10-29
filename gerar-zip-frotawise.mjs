@@ -40,7 +40,7 @@ const FILES = {
       version: '3.5.0',
       private: true,
       engines: {
-        node: '>=20.11.0 <23.0.0',
+        node: '>=20.11.0 <25.0.0',
         npm: '>=10.0.0',
       },
       scripts: {
@@ -263,10 +263,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20 LTS
+      - name: Setup Node.js 24 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: '20.18.0'
+          node-version: '24.x'
           cache: 'npm'
 
       - name: Install dependencies cleanly (npm ci)
@@ -3654,7 +3654,7 @@ try {
   console.log('\n====================================================================');
   console.log('[CONCLUÍDO COM SUCESSO!]');
   console.log('ZIP gerado em: ' + ZIP_OUTPUT);
-  console.log('Agora basta rodar: npm ci && npm run ci:check');
+  console.log('Na primeira instalação, rode: npm install && npm run ci:check; depois, use npm ci');
   console.log('====================================================================');
 } catch (error) {
   console.warn(

@@ -270,3 +270,53 @@ export const TireChip: React.FC<{
     </div>
   );
 };
+
+
+// Componentes de compatibilidade para formulários legados ainda presentes no projeto.
+export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'outline' | 'primary' | 'danger';
+}> = ({ variant = 'outline', className, children, ...props }) => (
+  <Btn
+    {...props}
+    v={variant === 'primary' ? 'primary' : variant === 'danger' ? 'danger' : 'ghost'}
+    className={cx(variant === 'outline' && 'border border-slate-300', className)}
+  >
+    {children}
+  </Btn>
+);
+
+export const InputField: React.FC<{
+  label: string;
+  type?: string;
+  required?: boolean;
+  step?: string;
+  value: string | number;
+  onChange: React.ChangeEventHandler<HTMLInputElement>;
+}> = ({ label, type = 'text', required, step, value, onChange }) => (
+  <Field label={label}>
+    <input
+      className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+      type={type}
+      required={required}
+      step={step}
+      value={value}
+      onChange={onChange}
+    />
+  </Field>
+);
+
+export const ModalCorporativo: React.FC<{
+  aberto: boolean;
+  aoFechar: () => void;
+  titulo: string;
+  subtitulo?: string;
+  children: React.ReactNode;
+}> = ({ aberto, aoFechar, titulo, subtitulo, children }) => {
+  if (!aberto) return null;
+  return (
+    <Modal title={titulo} onClose={aoFechar} wide>
+      {subtitulo && <p className="mb-4 text-sm text-slate-500">{subtitulo}</p>}
+      {children}
+    </Modal>
+  );
+};
