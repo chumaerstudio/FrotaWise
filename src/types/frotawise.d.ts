@@ -11,15 +11,9 @@ export type TipoOperacaoPneu =
 
 export type TipoCombustivel = 'Diesel' | 'Gasolina' | 'Arla';
 
-<<<<<<< HEAD
 export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Pneus / Recapagem';
 
 export type StatusMulta = 'Pendente' | 'Paga' | 'Em Recurso';
-=======
-export type TipoManutencao = 'Preventiva' | 'Corretiva' | 'Preditiva' | 'Pneus / Recapagem';
-
-export type StatusMulta = 'Pendente' | 'Paga' | 'Recorrida' | 'Cancelada' | 'Em Recurso';
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 
 export type PapelUsuario = 'ADMIN' | 'OPERADOR' | 'DIRETOR';
 

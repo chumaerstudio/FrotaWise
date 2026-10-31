@@ -66,15 +66,7 @@ export const financeiroService = {
           status: payload.status,
           data: assertValidIsoDate(payload.data),
           pontos: payload.pontos,
-<<<<<<< HEAD
           valorOriginal: toDecimalString(payload.valorOriginal ?? payload.valor, 2),
-=======
-          valorOriginal:
-            payload.valorOriginal !== undefined
-              ? toDecimalString(payload.valorOriginal, 2)
-              : null,
-          valor: toDecimalString(payload.valor, 2),
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         },
         { headers: { 'Idempotency-Key': idempotencyKey } }
       );

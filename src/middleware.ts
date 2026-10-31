@@ -7,10 +7,7 @@ const PROTECTED_PREFIXES = [
   '/malha-pneus',
   '/pneus',
   '/veiculos',
-<<<<<<< HEAD
   '/usuarios',
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 ];
 
 export function middleware(request: NextRequest) {
@@ -53,9 +50,6 @@ export const config = {
     '/malha-pneus/:path*',
     '/pneus/:path*',
     '/veiculos/:path*',
-<<<<<<< HEAD
     '/usuarios/:path*',
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   ],
 };

@@ -114,18 +114,9 @@ export const abastecimentosService = {
       const response = await httpClient.patch<AbastecimentoApiDTO>(
         '/abastecimentos/' + encodeURIComponent(id),
         {
-<<<<<<< HEAD
           tipo: input.tipo,
           litros: input.litros,
           valorUnit: toDecimalString(input.valorUnit, 4),
-=======
-          veiculoId: input.veiculoId,
-          tipo: input.tipo,
-          data: assertValidIsoDate(input.data),
-          litros: input.litros,
-          valorUnit: toDecimalString(input.valorUnit, 4),
-          km: Math.round(input.km),
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
           fornecedor: input.fornecedor.trim(),
         }
       );

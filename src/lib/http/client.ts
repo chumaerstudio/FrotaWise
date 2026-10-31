@@ -1,4 +1,4 @@
-  import axios, { type AxiosInstance, type AxiosError } from 'axios';
+import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import { getClientEnv } from '@/config/env';
 
 export interface SafeHttpErrorLog {

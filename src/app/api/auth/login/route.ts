@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-<<<<<<< HEAD
 import { mapUserFromBackend } from '@/lib/server/user';
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 import { cookies } from 'next/headers';
 import { getServerEnv } from '@/config/env';
 import {
@@ -79,7 +76,6 @@ export async function POST(request: Request) {
 
       const data = (await backendResponse.json()) as {
         accessToken: string;
-<<<<<<< HEAD
         usuario: {id: string; nome: string; email: string; role: string};
         empresa: {id: string; nomeEmpresa: string};
       };
@@ -87,10 +83,6 @@ export async function POST(request: Request) {
         return NextResponse.json({detail: 'Contrato de autenticação inválido'}, {status: 502});
       }
       const user = mapUserFromBackend({ ...data.usuario, empresaId: data.empresa.id, nomeEmpresa: data.empresa.nomeEmpresa });
-=======
-        user: Record<string, unknown>;
-      };
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 
       const csrfToken = generateCsrfToken();
       const cookieStore = cookies();
@@ -107,11 +99,7 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json(
-<<<<<<< HEAD
         { user, csrfToken },
-=======
-        { user: data.user, csrfToken },
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         { status: 200, headers: { 'Cache-Control': 'no-store' } }
       );
     } catch {

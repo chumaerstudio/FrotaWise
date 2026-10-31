@@ -1,10 +1,6 @@
 'use client';
 
-<<<<<<< HEAD
 import React, { useState } from 'react';
-=======
-import React from 'react';
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 import { useRouter } from 'next/navigation';
 import { Truck, Disc, Plus, ChevronRight } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
@@ -21,7 +17,6 @@ export default function VeiculosPage() {
     setSelectedChassisVehicleId,
     setDetailVehicleId,
     setShowVehicleModal,
-<<<<<<< HEAD
     liveMode, runLiveMutation,
   } = useEstoquePneus();
 
@@ -50,12 +45,6 @@ export default function VeiculosPage() {
           <button type="button" className="btn" onClick={()=>setEditing(null)}>Cancelar</button></div>
       </form>}
       <div className="card overflow-hidden">
-=======
-  } = useEstoquePneus();
-
-  return (
-    <div className="card overflow-hidden">
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       <SectionHead
         title="Frota de veículos"
         sub="Cavalos mecânicos, caminhões e utilitários cadastrados"
@@ -112,7 +101,6 @@ export default function VeiculosPage() {
                     <td className="mono text-right">{formatNumber(v.kmAtual)} km</td>
                     <td className="mono text-right font-bold">{formatCurrency(cost)}</td>
                     <td className="text-right whitespace-nowrap ef-sx15">
-<<<<<<< HEAD
                       {liveMode && <>
                         <Btn sm onClick={() => setEditing({...v})}>Editar</Btn>
                         <Btn sm onClick={() => {
@@ -121,8 +109,6 @@ export default function VeiculosPage() {
                           }
                         }}>Excluir</Btn>
                       </>}
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
                       <Btn sm onClick={() => setDetailVehicleId(v.id)}>
                         Detalhes
                       </Btn>
@@ -144,10 +130,7 @@ export default function VeiculosPage() {
           </table>
         </div>
       )}
-<<<<<<< HEAD
       </div>
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     </div>
   );
 }
