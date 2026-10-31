@@ -169,7 +169,7 @@ export default function DashboardPage() {
                       </div>
                     </td>
                     <td className="text-right">
-                      {al.tipo === 'Recapar' && !al.tire.veiculoAtualId ? (
+                      {al.tipo.toLowerCase() === 'recapar' && !al.tire.veiculoAtualId ? (
                         <Btn
                           sm
                           v="primary"
@@ -182,9 +182,25 @@ export default function DashboardPage() {
                         <Btn
                           sm
                           v="dark"
-                          onClick={() => openTireOperationModal(al.tire, al.tipo)}
+                          onClick={() => {
+                            switch (al.tipo.toLowerCase()) {
+                              case 'estocar':
+                                openTireOperationModal(al.tire, 'Estocar');
+                                break;
+                              case 'recapar':
+                                openTireOperationModal(al.tire, 'Recapar');
+                                break;
+                              case 'sucatear':
+                                openTireOperationModal(al.tire, 'Sucatear');
+                                break;
+                              default:
+                                router.push('/pneus');
+                            }
+                          }}
                         >
-                          Confirmar {al.tipo.toLowerCase()}
+                          {al.tipo.toLowerCase() === 'atencao'
+                            ? 'Ver pneu'
+                            : `Confirmar ${al.tipo.toLowerCase()}`}
                         </Btn>
                       )}
                     </td>

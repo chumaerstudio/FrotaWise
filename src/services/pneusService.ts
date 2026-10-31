@@ -1,5 +1,5 @@
 import type { EmpresaConfig, Pneu, RegraModeloPneu } from '@/types/frotawise';
-import type { PneuApiDTO, VeiculoApiDTO } from '@/types/domain';
+import type { PneuApiDTO } from '@/types/domain';
 import { httpClient } from '@/lib/http/client';
 import { normalizeApiError } from '@/lib/errors';
 import { mapPneuDtoToViewModel, mapVeiculoDtoToViewModel } from '@/lib/mappers';

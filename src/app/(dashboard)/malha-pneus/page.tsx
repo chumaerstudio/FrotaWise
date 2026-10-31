@@ -19,7 +19,6 @@ export default function MalhaPneusConfigPage() {
     setTires,
     maintenances,
     setMaintenances,
-    fines,
     setFines,
     setFuelings,
     preventiveList,

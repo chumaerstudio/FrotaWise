@@ -1271,9 +1271,10 @@ export const GlobalModals: React.FC = () => {
                         {h.data} · {h.obs}
                       </div>
                     </div>
-                    <Chip tone={Number(h.kmRodados) < 0 ? 'red' : 'teal'}>
-                      {Number(h.kmRodados) < 0 ? '' : '+'}
-                      {formatNumber(h.kmRodados)} km
+                    <Chip tone={h.kmRodados != null && h.kmRodados < 0 ? 'red' : 'teal'}>
+                      {h.kmRodados == null
+                        ? 'Km não informado'
+                        : `${h.kmRodados < 0 ? '' : '+'}${formatNumber(h.kmRodados)} km`}
                     </Chip>
                   </div>
                 </li>
