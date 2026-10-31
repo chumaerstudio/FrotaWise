@@ -1,4 +1,4 @@
-# FrotaWise Web — Enterprise Fleet & Tire Management
+# FrotaWise Web — Enterprise Fleet & Tire Managements
 
 Arquitetura Front-End corporativa de alta escalabilidade construída com **Next.js 14 (App Router)**, **TypeScript (Strict Mode)** e **Tailwind CSS**, projetada para transportadoras e operadores logísticos de grande porte.
 
