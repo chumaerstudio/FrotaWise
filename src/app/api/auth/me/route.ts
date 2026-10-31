@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+<<<<<<< HEAD
 import { mapUserFromBackend } from '@/lib/server/user';
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 import { cookies } from 'next/headers';
 import { getServerEnv } from '@/config/env';
 import { SESSION_COOKIE_NAME } from '@/lib/server/auth';
@@ -49,7 +52,11 @@ export async function GET() {
         });
       }
 
+<<<<<<< HEAD
       const user = mapUserFromBackend(await response.json());
+=======
+      const user = await response.json();
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       return NextResponse.json(
         { user },
         { status: 200, headers: { 'Cache-Control': 'no-store' } }

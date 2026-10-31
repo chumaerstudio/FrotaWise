@@ -23,6 +23,7 @@ export const dashboardService = {
 
   async getAlertasPreventivas(): Promise<AlertaPreventivaApiDTO[]> {
     try {
+<<<<<<< HEAD
       const response = await httpClient.get<{preventiveList: import('@/types/frotawise').AlertaPreventivaItem[]}>(
         '/bootstrap'
       );
@@ -33,6 +34,12 @@ export const dashboardService = {
         kmAtualOrigem: 'kmBase' as const,
         proximoLimiteKm: x.proximo ?? 0, restanteKm: x.restante ?? 0, status: x.status,
       }));
+=======
+      const response = await httpClient.get<AlertaPreventivaApiDTO[]>(
+        '/dashboard/preventivas'
+      );
+      return response.data;
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     } catch (error) {
       throw normalizeApiError(error);
     }

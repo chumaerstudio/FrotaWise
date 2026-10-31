@@ -30,6 +30,7 @@ export function createHttpClient(): AxiosInstance {
     },
   });
 
+<<<<<<< HEAD
   instance.interceptors.request.use((config) => {
     // O cookie CSRF é legível pelo navegador, o JWT não.
     if (typeof FormData !== 'undefined' && config.data instanceof FormData) config.headers.set('Content-Type', undefined);
@@ -40,6 +41,8 @@ export function createHttpClient(): AxiosInstance {
     return config;
   });
 
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   instance.interceptors.response.use(
     (response) => response,
     (error: AxiosError) => {

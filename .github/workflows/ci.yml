@@ -40,9 +40,12 @@ jobs:
       - name: Run Unit & Domain Tests
         run: npm run test
 
+<<<<<<< HEAD
       - name: Verify FastAPI Contract & BFF integration
         run: npm run test:contracts
 
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       - name: Run Production Build
         env:
           NODE_ENV: production

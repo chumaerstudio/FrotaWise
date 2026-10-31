@@ -50,7 +50,11 @@ export const regrasPreventivasService = {
   async list(): Promise<RegraManutencaoPreventiva[]> {
     try {
       const response = await httpClient.get<RegraManutencaoPreventiva[]>(
+<<<<<<< HEAD
         '/preventivas/regras'
+=======
+        '/empresa/regras-manutencao'
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       );
       return response.data;
     } catch (error) {
@@ -67,7 +71,11 @@ export const regrasPreventivasService = {
     }
     try {
       const response = await httpClient.post<RegraManutencaoPreventiva>(
+<<<<<<< HEAD
         '/preventivas/regras',
+=======
+        '/empresa/regras-manutencao',
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         {
           modelo: input.modelo?.trim() ?? '',
           categoria: input.categoria.trim(),
@@ -90,8 +98,13 @@ export const regrasPreventivasService = {
       throw new Error(validationError);
     }
     try {
+<<<<<<< HEAD
       const response = await httpClient.put<RegraManutencaoPreventiva>(
         '/preventivas/regras/' + encodeURIComponent(id),
+=======
+      const response = await httpClient.patch<RegraManutencaoPreventiva>(
+        '/empresa/regras-manutencao/' + encodeURIComponent(id),
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         {
           modelo: input.modelo?.trim() ?? '',
           categoria: input.categoria.trim(),
@@ -108,7 +121,11 @@ export const regrasPreventivasService = {
   async remove(id: string): Promise<void> {
     try {
       await httpClient.delete(
+<<<<<<< HEAD
         '/preventivas/regras/' + encodeURIComponent(id)
+=======
+        '/empresa/regras-manutencao/' + encodeURIComponent(id)
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       );
     } catch (error) {
       throw normalizeApiError(error);

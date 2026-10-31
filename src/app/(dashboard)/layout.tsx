@@ -2,8 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+<<<<<<< HEAD
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+=======
+import { usePathname } from 'next/navigation';
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 import {
   LayoutDashboard,
   Truck,
@@ -19,7 +23,10 @@ import {
   Fuel,
   PanelLeftClose,
   PanelLeftOpen,
+<<<<<<< HEAD
   Users,
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { APP_VERSION, LOGO_FROTAWISE, LOGO_FROTAWISE_ICON } from '@/services/api';
@@ -28,8 +35,11 @@ import { GlobalModals } from '@/components/forms/GlobalModals';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+<<<<<<< HEAD
   const router = useRouter();
   const {logout, usuario} = useAuth();
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const {
     company,
     theme,
@@ -41,7 +51,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setShowTireModal,
     setShowMaintenanceModal,
     handleExportBackup,
+<<<<<<< HEAD
     liveMode, isLoadingLiveData, liveError, refreshLiveData,
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   } = useEstoquePneus();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -104,6 +117,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       badge: null,
     },
     {
+<<<<<<< HEAD
       href: '/usuarios',
       label: 'Usuários e acesso',
       sub: 'Gestão de contas, permissões e senhas',
@@ -111,6 +125,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       badge: null,
     },
     {
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       href: '/malha-pneus',
       label: 'Configurações e malha',
       sub: 'Empresa, regras de alerta por modelo e cópia de segurança',
@@ -268,7 +284,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div>
             <div className="flex items-center gap-2 ef-t12_5" style={{ color: 'var(--mute)' }}>
               <span className="dot" />
+<<<<<<< HEAD
               <span>{company.nomeEmpresa} · {liveMode ? 'Supabase / Render (online)' : 'Banco local ativo · 100% offline'}</span>
+=======
+              <span>{company.nomeEmpresa} · Banco local ativo · 100% offline</span>
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
             </div>
             <h1 className="ef-t22 font-semibold leading-tight">{activeNav.label}</h1>
           </div>
@@ -279,7 +299,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               aria-label="Alternar tema claro/escuro"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             />
+<<<<<<< HEAD
             {liveMode && usuario && <Btn onClick={() => void logout().then(() => router.replace('/login'))}>Sair</Btn>}
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
             <Btn icon={Plus} onClick={() => setShowVehicleModal(true)}>
               Veículo
             </Btn>
@@ -293,16 +316,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="p-6 flex-1">
+<<<<<<< HEAD
           {liveMode && isLoadingLiveData && <div role="status" className="card p-5 mb-4">Carregando os dados da transportadora no Supabase…</div>}
           {liveMode && liveError && <div role="alert" className="card p-5 mb-4">
             <strong>Não foi possível carregar os dados reais:</strong> {liveError}
             <button className="btn ml-3" onClick={() => void refreshLiveData().catch(() => {})}>Tentar novamente</button>
           </div>}
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
           <p className="ef-t13_5 mb-5" style={{ color: 'var(--ink2)' }}>
             {activeNav.sub}
           </p>
           <div key={pathname} className="ef-rise">
+<<<<<<< HEAD
             {(!liveMode || (!isLoadingLiveData && !liveError)) ? children : null}
+=======
+            {children}
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
           </div>
         </main>
       </div>

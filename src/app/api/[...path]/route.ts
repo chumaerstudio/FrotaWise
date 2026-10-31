@@ -11,6 +11,7 @@ const ALLOWED_TOP_SEGMENTS = new Set([
   'multas',
   'abastecimentos',
   'dashboard',
+<<<<<<< HEAD
   'bootstrap',
   'onboarding',
   'preventivas',
@@ -19,6 +20,9 @@ const ALLOWED_TOP_SEGMENTS = new Set([
   'exportar-backup',
   'modelo-planilha',
   'importar-planilha',
+=======
+  'onboarding',
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 ]);
 
 function isAllowedProxyPath(segments: string[]): boolean {
@@ -33,7 +37,10 @@ function isAllowedProxyPath(segments: string[]): boolean {
       return false;
     }
   }
+<<<<<<< HEAD
   if (segments[0] === 'auth') return segments.length === 2 && segments[1] === 'change-password';
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   return ALLOWED_TOP_SEGMENTS.has(segments[0]);
 }
 
@@ -118,6 +125,7 @@ async function handleBffProxy(
     upstreamHeaders['If-Match'] = ifMatch;
   }
 
+<<<<<<< HEAD
   let bodyString: BodyInit | undefined;
   if (!['GET', 'HEAD'].includes(request.method.toUpperCase())) {
     const contentType = request.headers.get('content-type') ?? '';
@@ -128,6 +136,12 @@ async function handleBffProxy(
     } else {
       upstreamHeaders['Content-Type'] = 'application/json';
       const rawText = await request.text();
+=======
+  let bodyString: string | undefined;
+  if (!['GET', 'HEAD'].includes(request.method.toUpperCase())) {
+    upstreamHeaders['Content-Type'] = 'application/json';
+    const rawText = await request.text();
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (rawText) {
       try {
         const parsed = JSON.parse(rawText);
@@ -144,7 +158,10 @@ async function handleBffProxy(
         );
       }
     }
+<<<<<<< HEAD
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   }
 
   try {
@@ -156,6 +173,7 @@ async function handleBffProxy(
       signal: AbortSignal.timeout(env.backendTimeoutMs),
     });
 
+<<<<<<< HEAD
     // 204/205 não admitem body, mesmo string vazia.
     const responseBody = upstreamResponse.status === 204 || upstreamResponse.status === 205
       ? null : await upstreamResponse.arrayBuffer();
@@ -164,6 +182,14 @@ async function handleBffProxy(
       headers: {
         'Content-Type': upstreamResponse.headers.get('content-type') ?? 'application/json',
         'Content-Disposition': upstreamResponse.headers.get('content-disposition') ?? 'inline',
+=======
+    const responseText = await upstreamResponse.text();
+    return new NextResponse(responseText, {
+      status: upstreamResponse.status,
+      headers: {
+        'Content-Type':
+          upstreamResponse.headers.get('content-type') ?? 'application/json',
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         'Cache-Control': 'no-store, no-cache, must-revalidate, private',
       },
     });
@@ -174,7 +200,11 @@ async function handleBffProxy(
         title: 'Backend indisponível',
         status: 503,
         detail:
+<<<<<<< HEAD
           'O serviço operacional não respondeu a tempo. Consulte o estado atual antes de tentar reenviar a operação, para evitar duplicação.',
+=======
+          'O serviço operacional não respondeu a tempo. Nenhuma alteração foi persistida.',
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         code: 'UPSTREAM_UNAVAILABLE',
       },
       { status: 503, headers: { 'Cache-Control': 'no-store' } }

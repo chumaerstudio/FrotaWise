@@ -80,11 +80,16 @@ export const GlobalModals: React.FC = () => {
     editingFuelId,
     setEditingFuelId,
     syncOdometers,
+<<<<<<< HEAD
     liveMode, runLiveMutation,
   } = useEstoquePneus();
 
   // Helper único; dados só são atualizados após confirmação do FastAPI.
   const awaitLive = runLiveMutation;
+=======
+  } = useEstoquePneus();
+
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const [actionKmInput, setActionKmInput] = useState('');
   const [actionObsInput, setActionObsInput] = useState('');
   const [actionStockLocInput, setActionStockLocInput] = useState('Prateleira A-01');
@@ -276,6 +281,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleConfirmTireOperation = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       if (!tireActionModal) return;
       const { tire, targetAction, targetVehicleId, targetSlotCode } = tireActionModal;
@@ -293,6 +299,8 @@ export const GlobalModals: React.FC = () => {
       void ok.then(success => { if (success) { setTireActionModal(null); setSelectedTireForActionId(null); }});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (!tireActionModal) return;
     const { tire, targetAction, targetVehicleId, targetSlotCode } = tireActionModal;
     const kmToAdd = Math.max(0, Number(actionKmInput) || 0);
@@ -382,6 +390,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateVehicle = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       if (!vehicleForm.placa.trim() || !vehicleForm.categoria.trim()) return;
       void awaitLive('post', '/veiculos', {
@@ -395,6 +404,8 @@ export const GlobalModals: React.FC = () => {
       });
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (!vehicleForm.placa.trim() || !vehicleForm.categoria.trim()) return;
     const nv = {
       id: 'v-' + Date.now(),
@@ -416,6 +427,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateTire = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       if (!tireForm.fogo.trim() || !tireForm.marca.trim()) return;
       void awaitLive('post', '/pneus', {
@@ -427,6 +439,8 @@ export const GlobalModals: React.FC = () => {
       }, 'Pneu cadastrado.').then(ok => {if (ok) closeTireModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (!tireForm.fogo.trim() || !tireForm.marca.trim()) return;
     const kmIni = Math.max(0, Number(tireForm.kmInicial) || 0);
     const nt = {
@@ -462,6 +476,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateTire = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       const old = tires.find(t => t.id === editingTireId);
       if (!old) return;
@@ -475,6 +490,8 @@ export const GlobalModals: React.FC = () => {
       }, 'Pneu atualizado.').then(ok => {if (ok) closeTireModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (!tireForm.fogo.trim() || !tireForm.marca.trim()) return;
     setTires((p) =>
       p.map((t) =>
@@ -544,6 +561,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       if (!maintenanceForm.veiculoId || !maintenanceForm.descricao.trim() || !maintenanceForm.categoria) return;
       const item = {
@@ -558,6 +576,8 @@ export const GlobalModals: React.FC = () => {
         .then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (
       !maintenanceForm.veiculoId ||
       !maintenanceForm.descricao.trim() ||
@@ -627,6 +647,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       const old = maintenances.find(m => m.id === editingMaintId);
       if (!old) return;
@@ -643,6 +664,8 @@ export const GlobalModals: React.FC = () => {
       }, 'Manutenção atualizada.').then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const old = maintenances.find((m) => m.id === editingMaintId);
     if (
       !old ||
@@ -734,6 +757,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateFuel = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       if (!fuelForm.veiculoId || Number(fuelForm.litros) <= 0) return;
       void awaitLive('post', '/abastecimentos', {
@@ -743,6 +767,8 @@ export const GlobalModals: React.FC = () => {
       }, 'Abastecimento registrado.', true).then(ok => {if (ok) closeFuelModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const litros = Number(fuelForm.litros);
     const unit = Number(fuelForm.valorUnit);
     if (!fuelForm.veiculoId || !(litros > 0) || !(unit > 0)) return;
@@ -807,6 +833,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateFuel = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       const old = fuelings.find(f => f.id === editingFuelId);
       if (!old) return;
@@ -819,6 +846,8 @@ export const GlobalModals: React.FC = () => {
       }, 'Abastecimento atualizado.').then(ok => {if (ok) closeFuelModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const old = fuelings.find((f) => f.id === editingFuelId);
     const litros = Number(fuelForm.litros);
     const unit = Number(fuelForm.valorUnit);
@@ -848,6 +877,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateFine = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
       void awaitLive('post', '/multas', {
@@ -858,6 +888,8 @@ export const GlobalModals: React.FC = () => {
       }, 'Multa registrada.', true).then(ok => {if (ok) closeFineModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
     const ident = fineForm.identificado !== false;
     const base = Number(fineForm.valor) || 0;
@@ -887,6 +919,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateFine = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (liveMode) {
       const old = fines.find(f => f.id === editingFineId);
       if (!old) return;
@@ -897,6 +930,8 @@ export const GlobalModals: React.FC = () => {
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const old = fines.find((f) => f.id === editingFineId);
     if (!old || !fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
     const ident = fineForm.identificado !== false;

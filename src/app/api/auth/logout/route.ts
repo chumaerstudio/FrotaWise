@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getServerEnv } from '@/config/env';
+<<<<<<< HEAD
 import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, verifyCsrfForMutation } from '@/lib/server/auth';
 
 export async function POST(request: Request) {
   if (!verifyCsrfForMutation(request).valid) return NextResponse.json({detail:'Token CSRF inválido'}, {status:403});
+=======
+import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/lib/server/auth';
+
+export async function POST() {
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const env = getServerEnv();
   const cookieStore = cookies();
   const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;

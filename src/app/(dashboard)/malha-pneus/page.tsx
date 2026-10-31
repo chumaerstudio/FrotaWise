@@ -7,7 +7,10 @@ import { APP_VERSION, CATEGORIAS_MANUTENCAO, SCHEMA_VERSION, formatNumber } from
 import { findTireRule, normMedida, normTxt } from '@/services/pneusService';
 import { Btn, Chip, Empty, Field, SectionHead } from '@/components/ui';
 import { RegraManutencaoPreventiva, RegraModeloPneu } from '@/types/frotawise';
+<<<<<<< HEAD
 import { httpClient } from '@/lib/http/client';
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 
 export default function MalhaPneusConfigPage() {
   const {
@@ -25,7 +28,10 @@ export default function MalhaPneusConfigPage() {
     preventiveList,
     showToast,
     handleExportBackup,
+<<<<<<< HEAD
     liveMode, runLiveMutation,
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   } = useEstoquePneus();
 
   const emptyRule = { marca: '', medida: '', km1: '', km2: '', km3: '', kmSucata: '' };
@@ -43,7 +49,10 @@ export default function MalhaPneusConfigPage() {
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+<<<<<<< HEAD
     if (liveMode) { showToast('Restauração JSON local desativada em modo API. Use a importação de planilha pelo servidor.', 'error'); return; }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -63,6 +72,7 @@ export default function MalhaPneusConfigPage() {
     e.target.value = '';
   };
 
+<<<<<<< HEAD
   const handleImportSpreadsheet = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -93,13 +103,19 @@ export default function MalhaPneusConfigPage() {
     }, 'Configurações da empresa salvas.');
   };
 
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       setCompany((p) => ({ ...p, logoUrl: String(ev.target?.result || '') }));
+<<<<<<< HEAD
       showToast(liveMode ? 'Logo selecionada. Clique em salvar empresa para persistir.' : 'Logo atualizada com sucesso!');
+=======
+      showToast('Logo atualizada com sucesso!');
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     };
     reader.readAsDataURL(file);
   };
@@ -114,7 +130,10 @@ export default function MalhaPneusConfigPage() {
       kmSucata: Number(ruleForm.kmSucata) || 0,
     };
     if (!marca) return;
+<<<<<<< HEAD
     if (liveMode && !ruleForm.medida.trim()) {showToast('Informe a medida do pneu. A API atual exige medida específica.', 'error'); return;}
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const preenchidos = [kms.km1, kms.km2, kms.km3, kms.kmSucata].filter((n) => n > 0);
     if (preenchidos.length === 0) {
       showToast('Informe ao menos uma quilometragem para a regra.', 'error');
@@ -142,6 +161,7 @@ export default function MalhaPneusConfigPage() {
       showToast('Já existe uma regra para este modelo e tamanho. Edite a existente.', 'error');
       return;
     }
+<<<<<<< HEAD
     if (liveMode) {
       void runLiveMutation(editingRuleId ? 'put' : 'post',
         editingRuleId ? `/malha/${editingRuleId}` : '/malha',
@@ -152,6 +172,8 @@ export default function MalhaPneusConfigPage() {
         });
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setCompany((prev) => ({
       ...prev,
       regrasModelos: editingRuleId
@@ -180,7 +202,10 @@ export default function MalhaPneusConfigPage() {
   };
 
   const handleRemoveRule = (rg: RegraModeloPneu) => {
+<<<<<<< HEAD
     if (liveMode) {void runLiveMutation('delete', `/malha/${rg.id}`, undefined, 'Regra removida.'); return;}
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setCompany((prev) => ({
       ...prev,
       regrasModelos: (prev.regrasModelos || []).filter((x) => x.id !== rg.id),
@@ -220,6 +245,7 @@ export default function MalhaPneusConfigPage() {
       );
       return;
     }
+<<<<<<< HEAD
     if (liveMode) {
       if (!item.modelo.trim()) {showToast('O backend exige um modelo específico para regra preventiva.', 'error'); return;}
       void runLiveMutation(editingMaintRuleId ? 'put' : 'post',
@@ -230,6 +256,8 @@ export default function MalhaPneusConfigPage() {
         });
       return;
     }
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setCompany((prev) => ({
       ...prev,
       regrasManutencao: editingMaintRuleId
@@ -256,7 +284,10 @@ export default function MalhaPneusConfigPage() {
   };
 
   const handleRemoveMaintRule = (rg: RegraManutencaoPreventiva) => {
+<<<<<<< HEAD
     if (liveMode) {void runLiveMutation('delete', `/preventivas/regras/${rg.id}`, undefined, 'Regra preventiva removida.'); return;}
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setCompany((prev) => ({
       ...prev,
       regrasManutencao: (prev.regrasManutencao || []).filter((x) => x.id !== rg.id),
@@ -282,13 +313,18 @@ export default function MalhaPneusConfigPage() {
             <div>
               <h3 className="ef-t16 font-semibold">Backup e restauração</h3>
               <p className="ef-t12_5" style={{ color: 'var(--mute)' }}>
+<<<<<<< HEAD
                 {liveMode ? 'Exporte seus dados do Supabase ou importe uma planilha CSV/XLSX. Isso não substitui o backup do banco.' : 'Salve ou restaure todos os dados ao trocar de computador, via Pen Drive.'}
+=======
+                Salve ou restaure todos os dados ao trocar de computador, via Pen Drive.
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
               </p>
             </div>
           </div>
           <Btn v="dark" icon={Download} className="w-full ef-py3" onClick={handleExportBackup}>
             Baixar arquivo de backup
           </Btn>
+<<<<<<< HEAD
           {liveMode ? (
             <>
               <Btn onClick={handleDownloadTemplate}>Baixar modelo de planilha</Btn>
@@ -303,6 +339,13 @@ export default function MalhaPneusConfigPage() {
               <input type="file" accept=".json" onChange={handleImportBackup} className="hidden" />
             </label>
           )}
+=======
+          <label className="btn btn-primary w-full ef-py3 cursor-pointer">
+            <Upload size={16} />
+            Restaurar arquivo de backup (.json)
+            <input type="file" accept=".json" onChange={handleImportBackup} className="hidden" />
+          </label>
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
           <div className="ef-t12_5" style={{ color: 'var(--mute)' }}>
             Sistema v{APP_VERSION} · estrutura de dados {SCHEMA_VERSION}. Os backups de versões
             anteriores são atualizados automaticamente ao restaurar.
@@ -384,7 +427,10 @@ export default function MalhaPneusConfigPage() {
               />
             </Field>
           </div>
+<<<<<<< HEAD
           {liveMode && <Btn v="primary" onClick={handleSaveCompany}>Salvar empresa e limites no Supabase</Btn>}
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
         </div>
       </div>
 

@@ -184,6 +184,7 @@ export const pneusService = {
   },
 
   async alocar(cmd: AlocarPneuCommand): Promise<OperacaoPneuResult> {
+<<<<<<< HEAD
     if (!cmd.veiculoId || !cmd.posicao) throw new Error('Veículo e posição obrigatórios.');
     try {
       const response = await httpClient.post<PneuApiDTO>(`/pneus/${encodeURIComponent(cmd.pneuId)}/operacao`, {
@@ -201,5 +202,77 @@ export const pneusService = {
       }, {headers: {'Idempotency-Key':cmd.idempotencyKey}});
       return {pneu: mapPneuDtoToViewModel(response.data)};
     } catch(error){throw normalizeApiError(error);}
+=======
+    if (!cmd.veiculoId || !cmd.posicao) {
+      throw new Error(
+        'Veículo e posição do chassi são obrigatórios para montagem.'
+      );
+    }
+    if (!Number.isFinite(cmd.kmInstalacao) || cmd.kmInstalacao < 0) {
+      throw new Error('Hodômetro de instalação inválido.');
+    }
+
+    try {
+      const response = await httpClient.post<{
+        pneu: PneuApiDTO;
+        veiculo?: VeiculoApiDTO;
+      }>(
+        '/pneus/' + encodeURIComponent(cmd.pneuId) + '/alocar',
+        {
+          veiculoId: cmd.veiculoId,
+          posicao: cmd.posicao,
+          kmInstalacao: Math.round(cmd.kmInstalacao),
+          dataOperacao: cmd.dataOperacao,
+        },
+        {
+          headers: { 'Idempotency-Key': cmd.idempotencyKey },
+        }
+      );
+
+      return {
+        pneu: mapPneuDtoToViewModel(response.data.pneu),
+        veiculoAfetado: response.data.veiculo
+          ? mapVeiculoDtoToViewModel(response.data.veiculo)
+          : undefined,
+      };
+    } catch (error) {
+      throw normalizeApiError(error);
+    }
+  },
+
+  async retirar(cmd: RetirarPneuCommand): Promise<OperacaoPneuResult> {
+    if (!Number.isFinite(cmd.kmRetirada) || cmd.kmRetirada < 0) {
+      throw new Error('Hodômetro de retirada inválido.');
+    }
+
+    try {
+      const response = await httpClient.post<{
+        pneu: PneuApiDTO;
+        veiculo?: VeiculoApiDTO;
+      }>(
+        '/pneus/' + encodeURIComponent(cmd.pneuId) + '/retirar',
+        {
+          kmRetirada: Math.round(cmd.kmRetirada),
+          destino: cmd.destino,
+          localEstoque: cmd.localEstoque.trim(),
+          motivo: cmd.motivo.trim(),
+          sulcoMm: cmd.sulcoMm,
+          dataOperacao: cmd.dataOperacao,
+        },
+        {
+          headers: { 'Idempotency-Key': cmd.idempotencyKey },
+        }
+      );
+
+      return {
+        pneu: mapPneuDtoToViewModel(response.data.pneu),
+        veiculoAfetado: response.data.veiculo
+          ? mapVeiculoDtoToViewModel(response.data.veiculo)
+          : undefined,
+      };
+    } catch (error) {
+      throw normalizeApiError(error);
+    }
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   },
 };

@@ -43,8 +43,11 @@ export interface PneuApiDTO {
   posicaoAtual: string | null;
   localEstoque: string;
   tipoBanda: string | null;
+<<<<<<< HEAD
   historicoVeiculos?: import('./frotawise').HistoricoPneu[];
   reformas?: import('./frotawise').ReformaPneu[];
+=======
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   updatedAt?: string;
 }
 
@@ -126,6 +129,7 @@ export interface MultaApiDTO {
 }
 
 export interface DashboardResumoApiDTO {
+<<<<<<< HEAD
   totalVeiculos: number;
   totalPneus: number;
   pneusNovos: number;
@@ -139,4 +143,27 @@ export interface DashboardResumoApiDTO {
   tireAlerts: import('./frotawise').AlertaRemold[];
   preventiveAlerts: import('./frotawise').AlertaPreventivaItem[];
   fuelStats: unknown;
+=======
+  pneus: {
+    total: number;
+    rodando: number;
+    estoque: number;
+    recapagem: number;
+    sucata: number;
+  };
+  financeiro: {
+    custoManutencoesPeriodo: string;
+    custoMultasPeriodo: string;
+    custoCombustivelPeriodo: string;
+  };
+  fuelStats: {
+    totalLitrosCombustivel: number;
+    totalLitrosArla: number;
+    gastoTotalCombustivel: string;
+    gastoTotalArla: string;
+    totalLancamentos: number;
+    mediaKmLitroFrota: number | null;
+    veiculosComAmostraValida: number;
+  };
+>>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 }
