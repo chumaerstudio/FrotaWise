@@ -83,10 +83,7 @@ export function useAuth() {
       );
       setUser(response.data.user);
       setStatus('authenticated');
-<<<<<<< HEAD
       window.dispatchEvent(new Event('frotawise:session-changed'));
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       return true;
     } catch (err: unknown) {
       setUser(null);
@@ -121,10 +118,7 @@ export function useAuth() {
       clearSessionScopedCaches();
       setUser(null);
       setStatus('unauthenticated');
-<<<<<<< HEAD
       window.dispatchEvent(new Event('frotawise:session-ended'));
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     }
   }, []);
 

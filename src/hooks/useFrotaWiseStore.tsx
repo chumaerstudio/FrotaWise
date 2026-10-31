@@ -1,10 +1,6 @@
 'use client';
 
-<<<<<<< HEAD
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
-=======
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 import {
   Abastecimento,
   AlertaPreventivaItem,
@@ -31,11 +27,8 @@ import {
 } from '@/services/veiculosService';
 import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 import { normalizeStoredValue } from '@/lib/storage';
-<<<<<<< HEAD
 import { httpClient } from '@/lib/http/client';
 import { getClientEnv } from '@/config/env';
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 
 interface TireActionModalState {
   tire: Pneu;
@@ -145,14 +138,11 @@ interface FrotaWiseContextValue {
     label: string
   ) => string[];
   handleExportBackup: () => void;
-<<<<<<< HEAD
   liveMode: boolean;
   isLoadingLiveData: boolean;
   liveError: string | null;
   refreshLiveData: () => Promise<void>;
   runLiveMutation: (method: 'post'|'put'|'patch'|'delete', path: string, payload?: unknown, success?: string, idempotent?: boolean) => Promise<boolean>;
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 }
 
 const FrotaWiseContext = createContext<FrotaWiseContextValue | null>(null);
@@ -164,15 +154,10 @@ function useLocalState<T>(
 ): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [state, setState] = useState<T>(initial);
   const [hydrated, setHydrated] = useState(false);
-<<<<<<< HEAD
   const isLive = getClientEnv().appMode === 'API' && key !== 'ecofrota_v3_theme';
 
   useEffect(() => {
     if (isLive) { setHydrated(true); return; }
-=======
-
-  useEffect(() => {
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
@@ -183,34 +168,22 @@ function useLocalState<T>(
       // ignore
     }
     setHydrated(true);
-<<<<<<< HEAD
   }, [key, isLive]);
 
   useEffect(() => {
     if (hydrated && !isLive) {
-=======
-  }, [key]);
-
-  useEffect(() => {
-    if (hydrated) {
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       try {
         localStorage.setItem(key, JSON.stringify(state));
       } catch {
         // ignore
       }
     }
-<<<<<<< HEAD
   }, [key, state, hydrated, isLive]);
-=======
-  }, [key, state, hydrated]);
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
 
   return [state, setState];
 }
 
 export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
-<<<<<<< HEAD
   const liveMode = getClientEnv().appMode === 'API';
   const [isLoadingLiveData, setIsLoadingLiveData] = useState(liveMode);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -220,11 +193,6 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const [company, setCompany] = useLocalState<EmpresaConfig>(
     'ecofrota_v3_company',
     liveMode ? {...INITIAL_COMPANY, nomeEmpresa: 'Carregando empresa...', cnpj: ''} : INITIAL_COMPANY,
-=======
-  const [company, setCompany] = useLocalState<EmpresaConfig>(
-    'ecofrota_v3_company',
-    INITIAL_COMPANY,
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     (c) => ({
       ...INITIAL_COMPANY,
       ...c,
@@ -234,36 +202,23 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     })
   );
   const [theme, setTheme] = useLocalState<'light' | 'dark'>('ecofrota_v3_theme', 'light');
-<<<<<<< HEAD
   const [vehicles, setVehicles] = useLocalState<Veiculo[]>('ecofrota_v3_vehicles', liveMode ? [] : INITIAL_VEHICLES);
   const [tires, setTires] = useLocalState<Pneu[]>('ecofrota_v3_tires', liveMode ? [] : INITIAL_TIRES);
   const [maintenances, setMaintenances] = useLocalState<Manutencao[]>(
     'ecofrota_v3_maintenances',
     liveMode ? [] : INITIAL_MAINTENANCES,
-=======
-  const [vehicles, setVehicles] = useLocalState<Veiculo[]>('ecofrota_v3_vehicles', INITIAL_VEHICLES);
-  const [tires, setTires] = useLocalState<Pneu[]>('ecofrota_v3_tires', INITIAL_TIRES);
-  const [maintenances, setMaintenances] = useLocalState<Manutencao[]>(
-    'ecofrota_v3_maintenances',
-    INITIAL_MAINTENANCES,
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     (arr) =>
       Array.isArray(arr)
         ? arr.map((m) => ({ categoria: '', peca: '', km: null, ...m }))
         : INITIAL_MAINTENANCES
   );
-<<<<<<< HEAD
   const [fines, setFines] = useLocalState<Multa[]>('ecofrota_v3_fines', liveMode ? [] : INITIAL_FINES);
-=======
-  const [fines, setFines] = useLocalState<Multa[]>('ecofrota_v3_fines', INITIAL_FINES);
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const [fuelings, setFuelings] = useLocalState<Abastecimento[]>(
     'ecofrota_v3_fuelings',
     [],
     (arr) => (Array.isArray(arr) ? arr.map((f) => ({ tipo: 'Diesel', fornecedor: '', ...f })) : [])
   );
 
-<<<<<<< HEAD
   const refreshLiveData = async () => {
     if (!liveMode) return;
     try {
@@ -317,8 +272,6 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     } finally {liveMutationInFlight.current.delete(flightId);}
   };
 
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; k: number } | null>(
     null
   );
@@ -346,11 +299,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const [showFuelModal, setShowFuelModal] = useState(false);
   const [editingFuelId, setEditingFuelId] = useState<string | null>(null);
 
-<<<<<<< HEAD
   const locallyComputedTireAlerts = useMemo<AlertaRemold[]>(() => {
-=======
-  const tireAlerts = useMemo<AlertaRemold[]>(() => {
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const alerts: AlertaRemold[] = [];
     if (!company || !company.regrasPneus || !Array.isArray(tires)) {
       return alerts;
@@ -484,11 +433,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     return sem ? [...base, sem] : base;
   }, [maintenances]);
 
-<<<<<<< HEAD
   const locallyComputedPreventiveList = useMemo<AlertaPreventivaItem[]>(() => {
-=======
-  const preventiveList = useMemo<AlertaPreventivaItem[]>(() => {
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const out: AlertaPreventivaItem[] = [];
     const kmAtualLancado = (v: Veiculo): KmAtualLancado => {
       const regs = [
@@ -555,11 +500,8 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     return out;
   }, [vehicles, maintenances, fuelings, company.regrasManutencao]);
 
-<<<<<<< HEAD
   const tireAlerts = liveMode ? remoteTireAlerts : locallyComputedTireAlerts;
   const preventiveList = liveMode ? remotePreventiveList : locallyComputedPreventiveList;
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   const preventiveAlerts = useMemo(
     () =>
       preventiveList
@@ -623,10 +565,7 @@ O hodômetro e os pneus montados serão recalculados.`
       )
     )
       return;
-<<<<<<< HEAD
     if (liveMode) { void runLiveMutation('delete', `/abastecimentos/${f.id}`, undefined, 'Abastecimento excluído.'); return; }
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const next = fuelings.filter((x) => x.id !== f.id);
     setFuelings(next);
     const mud = syncOdometers(
@@ -652,10 +591,7 @@ O hodômetro e os pneus montados serão recalculados.`
       )
     )
       return;
-<<<<<<< HEAD
     if (liveMode) { void runLiveMutation('delete', `/manutencoes/${m.id}`, undefined, 'Manutenção excluída.'); return; }
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const next = maintenances.filter((x) => x.id !== m.id);
     setMaintenances(next);
     const mud = syncOdometers([m.veiculoId], fuelings, next, 'exclusão de manutenção');
@@ -673,10 +609,7 @@ O hodômetro e os pneus montados serão recalculados.`
       !window.confirm(`Excluir a multa ${f.ait} (${formatCurrency(f.valor)})?`)
     )
       return;
-<<<<<<< HEAD
     if (liveMode) { void runLiveMutation('delete', `/multas/${f.id}`, undefined, 'Multa excluída.'); return; }
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setFines((p) => p.filter((x) => x.id !== f.id));
     showToast('Multa excluída.');
   };
@@ -695,10 +628,7 @@ O histórico dele também será apagado.`
       )
     )
       return;
-<<<<<<< HEAD
     if (liveMode) { void runLiveMutation('delete', `/pneus/${t.id}`, undefined, 'Pneu excluído.'); return; }
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setTires((p) => p.filter((x) => x.id !== t.id));
     if (selectedTireForActionId === t.id) setSelectedTireForActionId(null);
     showToast(`Pneu Fogo #${t.fogo} excluído.`);
@@ -714,10 +644,7 @@ O histórico dele também será apagado.`
   };
 
   const handleCompleteRecap = (tire: Pneu) => {
-<<<<<<< HEAD
     if (liveMode) { void runLiveMutation('post', `/pneus/${tire.id}/concluir-recapagem`, undefined, 'Recapagem concluída.'); return; }
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     setTires((prev) =>
       prev.map((t) =>
         t.id === tire.id
@@ -737,7 +664,6 @@ O histórico dele também será apagado.`
   };
 
   const handleExportBackup = () => {
-<<<<<<< HEAD
     if (liveMode) {
       void httpClient.get('/onboarding/exportar-backup').then(({data}) => {
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
@@ -748,8 +674,6 @@ O histórico dele também será apagado.`
       }).catch(() => showToast('Sem permissão para exportar ou servidor indisponível.', 'error'));
       return;
     }
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
     const payload = {
       sistema: 'FrotaWise Enterprise Offline',
       versao: '3.5.0',
@@ -846,10 +770,7 @@ O histórico dele também será apagado.`
         handleDeleteFuel,
         syncOdometers,
         handleExportBackup,
-<<<<<<< HEAD
         liveMode, isLoadingLiveData, liveError, refreshLiveData, runLiveMutation,
-=======
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
       }}
     >
       {children}

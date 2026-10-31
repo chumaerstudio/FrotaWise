@@ -68,13 +68,8 @@ export function mapPneuDtoToViewModel(dto: PneuApiDTO): Pneu {
     posicaoAtual: dto.posicaoAtual ?? '',
     localEstoque: dto.localEstoque,
     tipoBanda: dto.tipoBanda ?? undefined,
-<<<<<<< HEAD
     historicoVeiculos: dto.historicoVeiculos || [],
     reformas: dto.reformas || [],
-=======
-    historicoVeiculos: [],
-    reformas: [],
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   };
 }
 

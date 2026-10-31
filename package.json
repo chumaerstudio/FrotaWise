@@ -16,15 +16,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "audit:ci": "npm audit --omit=dev --audit-level=high",
-<<<<<<< HEAD
     "ci:check": "npm run lint && npm run type-check && npm run test && npm run test:contracts && npm run build",
     "mock:api": "node mock-backend/server.mjs",
     "test:contracts": "node --test tests/integration/contract-live.test.cjs",
     "test:live": "node scripts/live-smoke.mjs"
-=======
-    "ci:check": "npm run lint && npm run type-check && npm run test && npm run build",
-    "mock:api": "node mock-backend/server.mjs"
->>>>>>> bd617bf40e6aa8283013d5e6cf525d17e6e29ee2
   },
   "dependencies": {
     "axios": "^1.7.7",
