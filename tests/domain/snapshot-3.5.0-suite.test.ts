@@ -174,7 +174,7 @@ describe('Suíte Completa Snapshot 3.5.0 (Issues FE-02 a FE-12)', () => {
     expect(sanitizeCsvCell('+SUM(A1:A10)')).toBe("'+SUM(A1:A10)");
 
     const report = validateSnapshotDryRun({
-      versao: '3.5.0',
+      versao: '3.9.0',
       vehicles: [{ id: 'v1', eixos: 3 }],
       fuelings: [{ id: 'f1', veiculoId: 'veiculo-inexistente', litros: 100 }],
     });

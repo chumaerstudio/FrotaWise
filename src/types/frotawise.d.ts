@@ -144,6 +144,7 @@ export interface Manutencao {
   fornecedor: string;
   data: string;
   valor: number;
+  integrarFinanceiro?: boolean;
 }
 
 export interface Multa {
@@ -159,6 +160,30 @@ export interface Multa {
   valorOriginal?: number;
   valorNIC?: number;
   valor: number;
+  integrarFinanceiro?: boolean;
+}
+
+export type TipoFinanceiro = 'Abastecimento' | 'Manutenção' | 'Multa' | 'Pneus' | 'Outros';
+export type OrigemPagamento = 'abastecimento' | 'manutencao' | 'multa' | 'pneu' | 'conta';
+
+export interface PagamentoPlano {
+  id: string;
+  origem: OrigemPagamento;
+  origemId: string;
+  forma: 'avista' | 'parcelado';
+  parcelas: number;
+  vencimento: string;
+  pagas: Record<string, string>;
+}
+
+export interface ContaPagar {
+  id: string;
+  tipo: TipoFinanceiro;
+  veiculoId: string;
+  descricao: string;
+  fornecedor: string;
+  valor: number;
+  data: string;
 }
 
 export interface Abastecimento {

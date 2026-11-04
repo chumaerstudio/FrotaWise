@@ -11,10 +11,10 @@ import { LOGO_FROTAWISE } from '@/assets/brand';
 import * as apiFacade from '@/services/api';
 
 describe('Issue FE-01 — Higiene de Módulos, Imports e Snapshot 3.5.0', () => {
-  it('preserva APP_VERSION 3.5.0 e SCHEMA_VERSION 1 nos módulos separados e na fachada api.ts', () => {
-    expect(APP_VERSION).toBe('3.5.0');
+  it('preserva APP_VERSION 3.9.0 e SCHEMA_VERSION 1 nos módulos separados e na fachada api.ts', () => {
+    expect(APP_VERSION).toBe('3.9.0');
     expect(SCHEMA_VERSION).toBe(1);
-    expect(apiFacade.APP_VERSION).toBe('3.5.0');
+    expect(apiFacade.APP_VERSION).toBe('3.9.0');
     expect(apiFacade.SCHEMA_VERSION).toBe(1);
     expect(apiFacade.LOGO_FROTAWISE).toBe(LOGO_FROTAWISE);
   });

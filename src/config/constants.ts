@@ -1,4 +1,4 @@
-export const APP_VERSION = '3.5.0' as const;
+export const APP_VERSION = '3.9.0' as const;
 export const SCHEMA_VERSION = 1 as const;
 export const SYSTEM_EXPORT_NAME = 'FrotaWise Enterprise Offline' as const;
 
@@ -10,6 +10,8 @@ export const STORAGE_KEYS = Object.freeze({
   FINES: 'ecofrota_v3_fines',
   FUELINGS: 'ecofrota_v3_fuelings',
   THEME: 'frotawise_ui_theme',
+  PAGAMENTOS: 'ecofrota_v3_pagamentos',
+  CONTAS: 'ecofrota_v3_contas',
 });
 
 export function formatCurrencyBRL(value: number): string {

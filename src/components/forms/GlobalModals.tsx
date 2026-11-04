@@ -48,6 +48,8 @@ export const GlobalModals: React.FC = () => {
     setFines,
     fuelings,
     setFuelings,
+    pagamentos,
+    setPagamentos,
     showToast,
     tireAlerts,
     selectedChassisVehicleId,
@@ -137,6 +139,10 @@ export const GlobalModals: React.FC = () => {
   }, [showTireModal, editingTireId, tires]);
 
   const emptyMaint = () => ({
+    integrarFinanceiro: false,
+    pgForma: 'avista' as 'avista' | 'parcelado',
+    pgParcelas: '2',
+    pgVenc: '',
     osNumero: '',
     veiculoId: '',
     tipo: 'Preventiva' as TipoManutencao,
@@ -165,6 +171,10 @@ export const GlobalModals: React.FC = () => {
           fornecedor: m.fornecedor || '',
           data: m.data,
           valor: String(m.valor),
+          integrarFinanceiro: m.integrarFinanceiro !== false,
+          pgForma: pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.forma || 'avista',
+          pgParcelas: String(pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.parcelas || 2),
+          pgVenc: pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.vencimento || m.data,
         });
       }
     } else if (showMaintenanceModal && maintenancePrefill) {
@@ -179,9 +189,13 @@ export const GlobalModals: React.FC = () => {
     } else if (!showMaintenanceModal) {
       setMaintenanceForm(emptyMaint());
     }
-  }, [showMaintenanceModal, editingMaintId, maintenancePrefill, maintenances, setMaintenancePrefill]);
+  }, [showMaintenanceModal, editingMaintId, maintenancePrefill, maintenances, pagamentos, setMaintenancePrefill]);
 
   const emptyFine = () => ({
+    integrarFinanceiro: false,
+    pgForma: 'avista' as 'avista' | 'parcelado',
+    pgParcelas: '2',
+    pgVenc: '',
     ait: '',
     veiculoId: '',
     motivo: '',
@@ -208,12 +222,16 @@ export const GlobalModals: React.FC = () => {
           data: f.data,
           pontos: f.pontos ?? 4,
           valor: String(f.valorOriginal ?? f.valor),
+          integrarFinanceiro: f.integrarFinanceiro !== false,
+          pgForma: pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.forma || 'avista',
+          pgParcelas: String(pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.parcelas || 2),
+          pgVenc: pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.vencimento || f.data,
         });
       }
     } else if (!showFineModal) {
       setFineForm(emptyFine());
     }
-  }, [showFineModal, editingFineId, fines]);
+  }, [showFineModal, editingFineId, fines, pagamentos]);
 
   const emptyFuel = () => ({
     veiculoId: '',
@@ -267,6 +285,46 @@ export const GlobalModals: React.FC = () => {
     setShowFuelModal(false);
     setEditingFuelId(null);
     setFuelForm(emptyFuel());
+  };
+
+  const upsertPaymentPlan = (origem: PagamentoPlano['origem'], origemId: string, form: { pgForma: 'avista' | 'parcelado'; pgParcelas: string; pgVenc: string }, data: string) => {
+    const parcelado = form.pgForma === 'parcelado';
+    const parcelas = parcelado ? Math.round(Number(form.pgParcelas)) : 1;
+    const atual = pagamentos.find((p) => p.origem === origem && p.origemId === origemId);
+    const next: PagamentoPlano = {
+      id: atual?.id || `pg-${Date.now()}`,
+      origem,
+      origemId,
+      forma: parcelado ? 'parcelado' : 'avista',
+      parcelas,
+      vencimento: form.pgVenc || data,
+      pagas: Object.fromEntries(Object.entries(atual?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
+    };
+    setPagamentos((prev) => {
+      const index = prev.findIndex((p) => p.origem === origem && p.origemId === origemId);
+      if (index < 0) return [...prev, next];
+      return prev.map((p, i) => (i === index ? next : p));
+    });
+  };
+
+  const removePaymentPlan = (origem: PagamentoPlano['origem'], origemId: string) => {
+    setPagamentos((prev) => prev.filter((p) => !(p.origem === origem && p.origemId === origemId)));
+  };
+
+  const validatePaymentPlan = (form: { integrarFinanceiro: boolean; pgForma: 'avista' | 'parcelado'; pgParcelas: string; pgVenc: string; data: string }) => {
+    if (!form.integrarFinanceiro) return true;
+    if (form.pgForma === 'parcelado') {
+      const count = Math.round(Number(form.pgParcelas));
+      if (!(count >= 2 && count <= 48)) {
+        showToast('Informe de 2 a 48 parcelas para integrar com o financeiro.', 'error');
+        return false;
+      }
+    }
+    if (!(form.pgVenc || form.data)) {
+      showToast('Informe o vencimento para integrar com o financeiro.', 'error');
+      return false;
+    }
+    return true;
   };
 
   const sufixoKm = (mud: string[]) =>
@@ -544,6 +602,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!liveMode && !validatePaymentPlan(maintenanceForm)) return;
     if (liveMode) {
       if (!maintenanceForm.veiculoId || !maintenanceForm.descricao.trim() || !maintenanceForm.categoria) return;
       const item = {
@@ -584,8 +643,10 @@ export const GlobalModals: React.FC = () => {
       fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
       data: date,
       valor: Number(maintenanceForm.valor) || 0,
+      integrarFinanceiro: !!maintenanceForm.integrarFinanceiro,
     };
     setMaintenances((p) => [nm, ...p]);
+    if (nm.integrarFinanceiro) upsertPaymentPlan('manutencao', nm.id, maintenanceForm, date);
 
     let msg = 'Despesa de manutenção registrada!';
     const delta = km - (Number(veh.kmAtual) || 0);
@@ -627,6 +688,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!liveMode && !validatePaymentPlan(maintenanceForm)) return;
     if (liveMode) {
       const old = maintenances.find(m => m.id === editingMaintId);
       if (!old) return;
@@ -669,8 +731,11 @@ export const GlobalModals: React.FC = () => {
       fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
       data: maintenanceForm.data,
       valor: Number(maintenanceForm.valor) || 0,
+      integrarFinanceiro: !!maintenanceForm.integrarFinanceiro,
     };
     const next = maintenances.map((m) => (m.id === old.id ? upd : m));
+    if (upd.integrarFinanceiro) upsertPaymentPlan('manutencao', old.id, maintenanceForm, upd.data);
+    else removePaymentPlan('manutencao', old.id);
     setMaintenances(next);
     const mud = syncOdometers([old.veiculoId, veh.id], fuelings, next, 'edição de manutenção');
     closeMaintenanceModal();
@@ -848,6 +913,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateFine = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!liveMode && !validatePaymentPlan(fineForm)) return;
     if (liveMode) {
       if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
       void awaitLive('post', '/multas', {
@@ -875,8 +941,10 @@ export const GlobalModals: React.FC = () => {
       valorOriginal: base,
       valorNIC: nic,
       valor: base + nic,
+      integrarFinanceiro: !!fineForm.integrarFinanceiro,
     };
     setFines((p) => [nf, ...p]);
+    if (nf.integrarFinanceiro) upsertPaymentPlan('multa', nf.id, fineForm, nf.data);
     closeFineModal();
     showToast(
       ident
@@ -887,6 +955,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateFine = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!liveMode && !validatePaymentPlan(fineForm)) return;
     if (liveMode) {
       const old = fines.find(f => f.id === editingFineId);
       if (!old) return;
@@ -915,8 +984,11 @@ export const GlobalModals: React.FC = () => {
       valorOriginal: base,
       valorNIC: nic,
       valor: base + nic,
+      integrarFinanceiro: !!fineForm.integrarFinanceiro,
     };
     setFines((p) => p.map((f) => (f.id === old.id ? upd : f)));
+    if (upd.integrarFinanceiro) upsertPaymentPlan('multa', old.id, fineForm, upd.data);
+    else removePaymentPlan('multa', old.id);
     closeFineModal();
     showToast('Multa atualizada!');
   };
@@ -1663,6 +1735,31 @@ export const GlobalModals: React.FC = () => {
                 />
               </Field>
             </div>
+            {!liveMode && (
+              <div className="ef-finopts space-y-3">
+                <label className="ef-check">
+                  <input type="checkbox" checked={maintenanceForm.integrarFinanceiro} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, integrarFinanceiro: e.target.checked })} />
+                  <span><b>Integrar com o financeiro</b><span className="block ef-t12_5" style={{ color: 'var(--mute)' }}>Lança esta ordem de serviço na área Financeiro, com parcelas e vencimento.</span></span>
+                </label>
+                {maintenanceForm.integrarFinanceiro && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Forma de pagamento">
+                      <select className="inp" value={maintenanceForm.pgForma} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, pgForma: e.target.value as 'avista' | 'parcelado' })}>
+                        <option value="avista">À vista</option><option value="parcelado">Parcelado</option>
+                      </select>
+                    </Field>
+                    <Field label="Quantidade de parcelas">
+                      <input type="number" min="2" max="48" disabled={maintenanceForm.pgForma !== 'parcelado'} className="inp mono" value={maintenanceForm.pgForma === 'parcelado' ? maintenanceForm.pgParcelas : 1} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, pgParcelas: e.target.value })} />
+                    </Field>
+                    <div className="col-span-2">
+                      <Field label={maintenanceForm.pgForma === 'parcelado' ? 'Vencimento da 1ª parcela' : 'Vencimento'}>
+                        <input type="date" required className="inp" value={maintenanceForm.pgVenc || maintenanceForm.data} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, pgVenc: e.target.value })} />
+                      </Field>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <FormActions
               onCancel={closeMaintenanceModal}
               label={editingMaintId ? 'Salvar alterações' : 'Salvar manutenção'}
@@ -1953,6 +2050,31 @@ export const GlobalModals: React.FC = () => {
                 {formatCurrency((Number(fineForm.valor) || 0) * NIC_MULTIPLICADOR)} ={' '}
                 <b>{formatCurrency((Number(fineForm.valor) || 0) * (1 + NIC_MULTIPLICADOR))}</b>. Não
                 gera pontos na CNH.
+              </div>
+            )}
+            {!liveMode && (
+              <div className="ef-finopts space-y-3">
+                <label className="ef-check">
+                  <input type="checkbox" checked={fineForm.integrarFinanceiro} onChange={(e) => setFineForm({ ...fineForm, integrarFinanceiro: e.target.checked })} />
+                  <span><b>Integrar com o financeiro</b><span className="block ef-t12_5" style={{ color: 'var(--mute)' }}>Lança esta multa na área Financeiro, com parcelas e vencimento.</span></span>
+                </label>
+                {fineForm.integrarFinanceiro && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Forma de pagamento">
+                      <select className="inp" value={fineForm.pgForma} onChange={(e) => setFineForm({ ...fineForm, pgForma: e.target.value as 'avista' | 'parcelado' })}>
+                        <option value="avista">À vista</option><option value="parcelado">Parcelado</option>
+                      </select>
+                    </Field>
+                    <Field label="Quantidade de parcelas">
+                      <input type="number" min="2" max="48" disabled={fineForm.pgForma !== 'parcelado'} className="inp mono" value={fineForm.pgForma === 'parcelado' ? fineForm.pgParcelas : 1} onChange={(e) => setFineForm({ ...fineForm, pgParcelas: e.target.value })} />
+                    </Field>
+                    <div className="col-span-2">
+                      <Field label={fineForm.pgForma === 'parcelado' ? 'Vencimento da 1ª parcela' : 'Vencimento'}>
+                        <input type="date" required className="inp" value={fineForm.pgVenc || fineForm.data} onChange={(e) => setFineForm({ ...fineForm, pgVenc: e.target.value })} />
+                      </Field>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <FormActions

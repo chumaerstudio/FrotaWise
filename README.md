@@ -34,8 +34,12 @@ frotawise-web/
 │   │   │   │   └── page.tsx        # Cadastro de marcas, aros e limites de KM por etapa
 │   │   │   ├── veiculos/
 │   │   │   │   └── page.tsx        # Cadastro da frota e visualização de pneus no caminhão
-│   │   │   └── custos-multas/
-│   │   │       └── page.tsx        # Aba de multas e histórico de reparos por KM
+│   │   │   ├── custos-multas/
+│   │   │   │   └── page.tsx        # Manutenções e multas
+│   │   │   ├── abastecimento/
+│   │   │   │   └── page.tsx        # Lançamentos e média de consumo
+│   │   │   └── financeiro/
+│   │   │       └── page.tsx        # Pagamentos, parcelas e contas a pagar
 │   │
 │   ├── components/                 # Componentes visuais reutilizáveis
 │   │   ├── ui/                     # Botões, Modais, Tabelas, Inputs, Badges de Alerta
@@ -52,6 +56,12 @@ frotawise-web/
 │   │
 │   └── hooks/                      # Lógica de estado da tela (ex: useAuth, useEstoquePneus)
 ```
+
+## Atualização 3.9.0 — Financeiro
+
+A versão 3.9.0 adiciona a área **Financeiro**, com acompanhamento de parcelas a vencer, vencidas e pagas. O módulo reúne abastecimentos, manutenções e multas marcadas para integração, valores de reformas de pneus e contas avulsas. Também permite configurar pagamentos à vista ou em até 48 parcelas, registrar baixas por parcela e desfazer uma baixa.
+
+**Disponibilidade:** nesta entrega, o Financeiro funciona no modo DEMO/offline, com dados persistidos no armazenamento local do navegador e incluídos no backup JSON. Para testar esse módulo localmente, configure `NEXT_PUBLIC_APP_MODE=DEMO` no `.env.local` durante o desenvolvimento. Em modo API, a tela informa que está indisponível: o backend atual não possui endpoints para persistir planos de pagamento e contas avulsas. Assim, a interface não apresenta dados como salvos no servidor quando ainda não há sincronização.
 
 ## Diferenciais para Empresas de Grande Porte (Enterprise-Grade)
 

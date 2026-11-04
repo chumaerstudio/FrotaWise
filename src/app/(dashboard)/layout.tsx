@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Fuel,
+  DollarSign,
   PanelLeftClose,
   PanelLeftOpen,
   Users,
@@ -101,6 +102,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       label: 'Abastecimento',
       sub: 'Lançamentos de combustível, KM e média de consumo',
       icon: Fuel,
+      badge: null,
+    },
+    {
+      href: '/financeiro',
+      label: 'Financeiro',
+      sub: 'Pagamentos a vencer, vencidos e pagos por categoria',
+      icon: DollarSign,
       badge: null,
     },
     {

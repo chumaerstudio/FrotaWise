@@ -10,6 +10,8 @@ import {
   Manutencao,
   Multa,
   Pneu,
+  PagamentoPlano,
+  ContaPagar,
   TipoManutencao,
   TipoOperacaoPneu,
   Veiculo,
@@ -25,7 +27,7 @@ import {
   odometerFrom,
   vehicleLaunchKms,
 } from '@/services/veiculosService';
-import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
+import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, STORAGE_KEYS, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 import { normalizeStoredValue } from '@/lib/storage';
 import { httpClient } from '@/lib/http/client';
 import { getClientEnv } from '@/config/env';
@@ -59,6 +61,10 @@ interface FrotaWiseContextValue {
   setFines: React.Dispatch<React.SetStateAction<Multa[]>>;
   fuelings: Abastecimento[];
   setFuelings: React.Dispatch<React.SetStateAction<Abastecimento[]>>;
+  pagamentos: PagamentoPlano[];
+  setPagamentos: React.Dispatch<React.SetStateAction<PagamentoPlano[]>>;
+  contas: ContaPagar[];
+  setContas: React.Dispatch<React.SetStateAction<ContaPagar[]>>;
   toast: { message: string; type: 'success' | 'error'; k: number } | null;
   showToast: (message: string, type?: 'success' | 'error') => void;
   tireAlerts: AlertaRemold[];
@@ -218,6 +224,15 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     [],
     (arr) => (Array.isArray(arr) ? arr.map((f) => ({ tipo: 'Diesel', fornecedor: '', ...f })) : [])
   );
+  // O financeiro do modo DEMO é persistido no navegador. O modo API aguarda endpoints próprios.
+  const [pagamentos, setPagamentos] = useLocalState<PagamentoPlano[]>(
+    STORAGE_KEYS.PAGAMENTOS, [],
+    (arr) => Array.isArray(arr) ? arr.map((p) => ({ forma: 'avista', parcelas: 1, vencimento: '', pagas: {}, ...p })) : []
+  );
+  const [contas, setContas] = useLocalState<ContaPagar[]>(
+    STORAGE_KEYS.CONTAS, [],
+    (arr) => Array.isArray(arr) ? arr.map((c) => ({ tipo: 'Outros', fornecedor: '', veiculoId: '', ...c })) : []
+  );
 
   const refreshLiveData = async () => {
     if (!liveMode) return;
@@ -246,7 +261,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     // Não carregar dados fictícios quando o backend não responder.
     const reload = () => { setIsLoadingLiveData(true); void refreshLiveData().catch(() => {}); };
     const clear = () => { setVehicles([]); setTires([]); setMaintenances([]); setFuelings([]);
-      setFines([]); setRemotePreventiveList([]); setRemoteTireAlerts([]); };
+      setFines([]); setPagamentos([]); setContas([]); setRemotePreventiveList([]); setRemoteTireAlerts([]); };
     window.addEventListener('frotawise:session-changed', reload);
     window.addEventListener('frotawise:session-ended', clear);
     reload();
@@ -594,6 +609,7 @@ O hodômetro e os pneus montados serão recalculados.`
     if (liveMode) { void runLiveMutation('delete', `/manutencoes/${m.id}`, undefined, 'Manutenção excluída.'); return; }
     const next = maintenances.filter((x) => x.id !== m.id);
     setMaintenances(next);
+    setPagamentos((p) => p.filter((x) => !(x.origem === 'manutencao' && x.origemId === m.id)));
     const mud = syncOdometers([m.veiculoId], fuelings, next, 'exclusão de manutenção');
     showToast('Manutenção excluído.' + sufixoKm(mud));
   };
@@ -611,6 +627,7 @@ O hodômetro e os pneus montados serão recalculados.`
       return;
     if (liveMode) { void runLiveMutation('delete', `/multas/${f.id}`, undefined, 'Multa excluída.'); return; }
     setFines((p) => p.filter((x) => x.id !== f.id));
+    setPagamentos((p) => p.filter((x) => !(x.origem === 'multa' && x.origemId === f.id)));
     showToast('Multa excluída.');
   };
 
@@ -676,7 +693,7 @@ O histórico dele também será apagado.`
     }
     const payload = {
       sistema: 'FrotaWise Enterprise Offline',
-      versao: '3.5.0',
+      versao: '3.9.0',
       schema: 1,
       dataExportacao: new Date().toISOString(),
       company,
@@ -685,6 +702,8 @@ O histórico dele também será apagado.`
       maintenances,
       fines,
       fuelings,
+      pagamentos,
+      contas,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -713,6 +732,10 @@ O histórico dele também será apagado.`
         setFines,
         fuelings,
         setFuelings,
+        pagamentos,
+        setPagamentos,
+        contas,
+        setContas,
         toast,
         showToast,
         tireAlerts,
