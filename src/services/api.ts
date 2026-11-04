@@ -10,8 +10,7 @@ export {
   formatNumberPtBr,
 } from '@/config/constants';
 
-export { LOGO_FROTAWISE } from '@/assets/brand';
-export { LOGO_FROTAWISE as LOGO_FROTAWISE_ICON, LOGO_FROTAWISE as FAVICON_FROTAWISE } from '@/assets/brand';
+export { LOGO_FROTAWISE, LOGO_FROTAWISE_ICON, FAVICON_FROTAWISE } from '@/assets/brand';
 export {
   httpClient as api,
   createHttpClient,
