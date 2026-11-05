@@ -120,7 +120,10 @@ export function buildPayables(args: {
     if (Number(r.valor) > 0) base.push({
       origem: 'pneu', origemId: `${t.id}:${r.id}`, tipo: 'Pneus',
       descricao: `Recapagem · Fogo #${t.fogo} (${r.ciclo}ª, banda ${r.tipoBanda || '—'})`,
-      sub: r.fornecedor || '', total: Number(r.valor), data: r.data,
+      // Compatibilidade com os dois formatos: legado (`data`) e atual (`dataEnvio`/`dataRetorno`).
+      sub: r.fornecedor || '',
+      total: Number(r.valor),
+      data: r.data || r.dataRetorno || r.dataEnvio || '',
     });
   }));
 

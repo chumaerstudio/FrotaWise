@@ -37,3 +37,20 @@ Por isso, o componente monolítico não foi colocado por cima da aplicação Nex
 ## Observação operacional
 
 O arquivo em `reference/` é uma referência integral e não é importado em runtime. A aplicação em execução continua usando os módulos listados acima, preservando autenticação, permissões, serviços e integração com API. Em modo API, as operações continuam sujeitas aos endpoints e às regras do backend.
+
+## Correção de compilação — 05/11/2026
+
+Após o erro reportado em `src/components/forms/GlobalModals.tsx`, foi corrigida a importação do tipo `PagamentoPlano` a partir de `@/types/frotawise`. O tipo já existia em `src/types/frotawise.d.ts`; faltava apenas importá-lo no componente que o utiliza nas funções de criação e remoção de planos de pagamento.
+
+A instalação das dependências (`npm ci`) não foi concluída neste ambiente, portanto o build completo do Next.js não pôde ser reexecutado. A correção do import foi conferida diretamente no código-fonte.
+
+## Correção de compilação — datas das recapagens
+
+Após o erro reportado em `src/services/financeiroLocal.ts`, a montagem dos lançamentos de recapagem passou a aceitar os dois contratos de dados presentes no projeto:
+
+1. Campo legado `data` (prioridade para preservar registros antigos).
+2. Campo `dataRetorno`, quando o campo legado não estiver preenchido.
+3. Campo `dataEnvio`, como alternativa quando não houver data de retorno.
+4. String vazia quando o registro não tiver nenhuma data, sem atribuir uma data fictícia.
+
+Foi incluído um teste em `tests/domain/financeiro-local.test.ts` para cobrir os formatos com `dataRetorno`, `dataEnvio` e sem data. A checagem TypeScript isolada do serviço financeiro e de seus tipos foi aprovada. A checagem global e o build Next.js ainda dependem de instalar as dependências do projeto, que não estão presentes neste ambiente.

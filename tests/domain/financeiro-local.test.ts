@@ -28,6 +28,28 @@ describe('Financeiro local — atualização 3.9.0', () => {
     expect(daysBetween('2026-11-01', '2026-11-04')).toBe(3);
   });
 
+  it('usa datas de envio/retorno da recapagem quando o campo legado data não existe', () => {
+    const tireBase: Pneu = {
+      id: 'p-date', fogo: '202', marca: 'Marca', medida: '295/80 R22.5',
+      sulcoMm: 10, recapagens: 1, kmTotal: 50000, classificacao: 'Estocar',
+      veiculoAtualId: '', posicaoAtual: '', localEstoque: 'A-01', historicoVeiculos: [],
+      reformas: [
+        { id: 'r-retorno', ciclo: 1, dataRetorno: '2026-11-05', fornecedor: 'Recapadora', tipoBanda: 'Misto', valor: 250 },
+        { id: 'r-envio', ciclo: 2, dataEnvio: '2026-11-06', fornecedor: 'Recapadora', tipoBanda: 'Liso', valor: 300 },
+        { id: 'r-sem-data', ciclo: 3, fornecedor: 'Recapadora', tipoBanda: 'Liso', valor: 350 },
+      ],
+    };
+
+    const items = buildPayables({
+      fuelings: [], maintenances: [], fines: [], tires: [tireBase],
+      vehicles: [], pagamentos: [], contas: [],
+    });
+
+    expect(items.map((item) => item.primeiroVenc)).toEqual([
+      '2026-11-05', '2026-11-06', '',
+    ]);
+  });
+
   it('reúne lançamentos integrados, exclui os desmarcados e distribui contas parceladas', () => {
     const vehicles: Veiculo[] = [{
       id: 'v1', placa: 'ABC-1234', uf: 'MG', modelo: 'Caminhão Teste',

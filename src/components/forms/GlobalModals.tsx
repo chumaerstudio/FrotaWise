@@ -32,7 +32,7 @@ import {
   SectionHead,
 } from '@/components/ui';
 import { useRouter } from 'next/navigation';
-import { StatusMulta, TipoCombustivel, TipoManutencao } from '@/types/frotawise';
+import type { PagamentoPlano, StatusMulta, TipoCombustivel, TipoManutencao } from '@/types/frotawise';
 
 export const GlobalModals: React.FC = () => {
   const router = useRouter();
