@@ -1617,10 +1617,20 @@ export const GlobalModals: React.FC = () => {
                                 min={h.kmInicial}
                                 className="inp mono"
                                 style={{ width: 130 }}
-                                value={historyEdit.kmFinal}
-                                onChange={(e) => setHistoryEdit({ id: h.id, kmFinal: e.target.value })}
+                                value={historyEdit?.kmFinal ?? ''}
+                                onChange={(e) => {
+                                  if (h.id == null) return;
+                                  setHistoryEdit({ id: h.id, kmFinal: e.target.value });
+                                }}
                               />
-                              <Btn sm v="primary" onClick={() => handleEditTireMovement(hTire.id, h.id)}>
+                              <Btn
+                                sm
+                                v="primary"
+                                onClick={() => {
+                                  if (h.id == null) return;
+                                  handleEditTireMovement(hTire.id, h.id);
+                                }}
+                              >
                                 Salvar KM final
                               </Btn>
                               <Btn sm onClick={() => setHistoryEdit(null)}>
@@ -1629,10 +1639,26 @@ export const GlobalModals: React.FC = () => {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <Btn sm onClick={() => setHistoryEdit({ id: h.id, kmFinal: String(h.kmFinal ?? '') })}>
+                              <Btn
+                                sm
+                                onClick={() => {
+                                  if (h.id == null) return;
+                                  setHistoryEdit({
+                                    id: h.id,
+                                    kmFinal: String(h.kmFinal ?? ''),
+                                  });
+                                }}
+                              >
                                 Editar KM final
                               </Btn>
-                              <Btn sm className="ef-del" onClick={() => handleCancelTireMovement(hTire.id, h.id)}>
+                              <Btn
+                                sm
+                                className="ef-del"
+                                onClick={() => {
+                                  if (h.id == null) return;
+                                  handleCancelTireMovement(hTire.id, h.id);
+                                }}
+                              >
                                 Cancelar movimentação
                               </Btn>
                             </div>
