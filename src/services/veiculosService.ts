@@ -7,6 +7,7 @@ import type {
   Pneu,
   RegraManutencaoPreventiva,
   Veiculo,
+  Viagem,
 } from '@/types/frotawise';
 import type { VeiculoApiDTO } from '@/types/domain';
 import { httpClient } from '@/lib/http/client';
@@ -91,6 +92,9 @@ export const INITIAL_MAINTENANCES: Manutencao[] = [
 export const INITIAL_FINES: Multa[] = [
   {
     id: 'f1',
+    codigo: 'MUL-2026-0001',
+    tipoLancamento: 'Multa',
+    multaOrigemId: null,
     ait: 'AIT-998123-MG',
     veiculoId: 'v1',
     motivo: 'Excesso de velocidade até 20% na BR-381',
@@ -105,6 +109,9 @@ export const INITIAL_FINES: Multa[] = [
   },
   {
     id: 'f2',
+    codigo: 'MUL-2026-0002',
+    tipoLancamento: 'Multa',
+    multaOrigemId: null,
     ait: 'AIT-445102-SP',
     veiculoId: 'v2',
     motivo: 'Transitar em horário/local não permitido (Rodízio Pesados)',
@@ -119,6 +126,9 @@ export const INITIAL_FINES: Multa[] = [
   },
   {
     id: 'f3',
+    codigo: 'MUL-2026-0003',
+    tipoLancamento: 'Multa',
+    multaOrigemId: null,
     ait: 'AIT-771920-PR',
     veiculoId: 'v1',
     motivo: 'Evasão de balança obrigatória ANTT',
@@ -366,10 +376,18 @@ export function computeFuelMediaDetails(
   return details;
 }
 
+/**
+ * Leituras ABSOLUTAS de hodômetro lançadas para o veículo (nunca são somadas):
+ * abastecimentos, manutenções, viagens (KM inicial/final) e movimentações de
+ * pneus que informaram o KM do veículo. O hodômetro atual é a maior leitura.
+ * Multas não entram: não movimentam quilometragem.
+ */
 export const vehicleLaunchKms = (
   vehId: string,
   fuelings: Abastecimento[] = [],
-  maintenances: Manutencao[] = []
+  maintenances: Manutencao[] = [],
+  trips: Viagem[] = [],
+  tires: Pneu[] = []
 ): number[] => [
   ...(Array.isArray(fuelings) ? fuelings : [])
     .filter((f) => f?.veiculoId === vehId)
@@ -377,6 +395,23 @@ export const vehicleLaunchKms = (
   ...(Array.isArray(maintenances) ? maintenances : [])
     .filter((m) => m?.veiculoId === vehId && m.km !== null && m.km !== undefined)
     .map((m) => Number(m.km)),
+  ...(Array.isArray(trips) ? trips : [])
+    .filter((t) => t?.veiculoId === vehId)
+    .flatMap((t) => [
+      Number(t.kmInicial),
+      t.kmFinal !== null && t.kmFinal !== undefined ? Number(t.kmFinal) : NaN,
+    ]),
+  ...(Array.isArray(tires) ? tires : []).flatMap((t) =>
+    (t?.historicoVeiculos || [])
+      .filter(
+        (h) =>
+          !h.cancelada &&
+          h.veiculoId === vehId &&
+          h.kmVeiculo !== null &&
+          h.kmVeiculo !== undefined
+      )
+      .map((h) => Number(h.kmVeiculo))
+  ),
 ].filter((n) => Number.isFinite(n));
 
 export const baseKmOf = (v: Veiculo): number | null =>
@@ -405,29 +440,61 @@ export const applyOdometer = (
   if (!veh) return { vehs: safeVehicles, tirs: safeTires };
   const delta = novo - (Number(veh.kmAtual) || 0);
   if (!delta) return { vehs: safeVehicles, tirs: safeTires };
+  // O KM do veículo NÃO é repassado aos pneus: cada pneu só acumula KM pelas
+  // suas próprias movimentações (ver pneuKmService). Os parâmetros `obs` e
+  // `data` permanecem na assinatura por compatibilidade.
+  void obs;
+  void data;
   return {
     vehs: safeVehicles.map((v) => (v.id === vehId ? { ...v, kmAtual: novo } : v)),
-    tirs: safeTires.map((t) =>
-      t.veiculoAtualId === vehId && t.posicaoAtual !== 'ESTEPE-1'
-        ? {
-            ...t,
-            kmTotal: Math.max(0, (Number(t.kmTotal) || 0) + delta),
-            historicoVeiculos: [
-              ...(t.historicoVeiculos || []),
-              {
-                id: `h-${Date.now()}-${t.id}`,
-                placa: veh.placa,
-                modelo: veh.modelo,
-                kmRodados: delta,
-                data,
-                obs,
-              },
-            ],
-          }
-        : t
-    ),
+    tirs: safeTires,
   };
 };
+
+export interface FuelKmDiff {
+  /** Diferença de KM para o abastecimento anterior do mesmo veículo (null = não se aplica). */
+  diff: number | null;
+  kmAnterior: number | null;
+  /** True quando o KM atual é menor que o do abastecimento anterior (divergência). */
+  divergente: boolean;
+}
+
+/**
+ * MÉDIA DE KM = KM do abastecimento atual − KM do abastecimento imediatamente
+ * anterior do MESMO veículo (ordem por data e KM). Não é o consumo em km/l.
+ * Arla fica fora da sequência, igual à média km/l. O primeiro abastecimento do
+ * veículo e KM menor que o anterior não geram valor.
+ */
+export function computeFuelKmDiffs(input: Abastecimento[] = []): Record<string, FuelKmDiff> {
+  const out: Record<string, FuelKmDiff> = {};
+  const lista = (Array.isArray(input) ? input : []).filter(Boolean);
+  const porVeiculo = new Map<string, Abastecimento[]>();
+  for (const f of lista) {
+    if (f.tipo === 'Arla') {
+      out[f.id] = { diff: null, kmAnterior: null, divergente: false };
+      continue;
+    }
+    const arr = porVeiculo.get(f.veiculoId) ?? [];
+    arr.push(f);
+    porVeiculo.set(f.veiculoId, arr);
+  }
+  for (const arr of Array.from(porVeiculo.values())) {
+    const ord = [...arr].sort(cmpFuel);
+    ord.forEach((f, i) => {
+      if (i === 0) {
+        out[f.id] = { diff: null, kmAnterior: null, divergente: false };
+        return;
+      }
+      const ant = Number(ord[i - 1].km);
+      const diff = Number(f.km) - ant;
+      out[f.id] =
+        diff < 0
+          ? { diff: null, kmAnterior: ant, divergente: true }
+          : { diff, kmAnterior: ant, divergente: false };
+    });
+  }
+  return out;
+}
 
 export const veiculosService = {
   async list(): Promise<Veiculo[]> {

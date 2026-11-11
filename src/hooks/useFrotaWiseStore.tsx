@@ -15,6 +15,7 @@ import {
   TipoManutencao,
   TipoOperacaoPneu,
   Veiculo,
+  Viagem,
 } from '@/types/frotawise';
 import { INITIAL_COMPANY, INITIAL_TIRES, getTireLimits, normTxt } from '@/services/pneusService';
 import {
@@ -23,10 +24,14 @@ import {
   INITIAL_VEHICLES,
   applyOdometer,
   cmpFuel,
+  computeFuelKmDiffs,
   computeFuelMediaDetails,
   odometerFrom,
   vehicleLaunchKms,
+  type FuelKmDiff,
 } from '@/services/veiculosService';
+import { INITIAL_TRIPS, normalizarViagens, sincronizarDespesaAbastecimento } from '@/services/viagensService';
+import { normalizarMultas } from '@/services/multasService';
 import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, STORAGE_KEYS, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 import { normalizeStoredValue } from '@/lib/storage';
 import { httpClient } from '@/lib/http/client';
@@ -61,6 +66,8 @@ interface FrotaWiseContextValue {
   setFines: React.Dispatch<React.SetStateAction<Multa[]>>;
   fuelings: Abastecimento[];
   setFuelings: React.Dispatch<React.SetStateAction<Abastecimento[]>>;
+  trips: Viagem[];
+  setTrips: React.Dispatch<React.SetStateAction<Viagem[]>>;
   pagamentos: PagamentoPlano[];
   setPagamentos: React.Dispatch<React.SetStateAction<PagamentoPlano[]>>;
   contas: ContaPagar[];
@@ -73,6 +80,7 @@ interface FrotaWiseContextValue {
   totalStockTires: Pneu[];
   expensesByVehicleData: { placa: string; Manutencao: number; Multas: number }[];
   fuelMedias: Record<string, { media: number; dist: number; litros: number; kmAnterior: number }>;
+  fuelKmDiffs: Record<string, FuelKmDiff>;
   fuelRows: Abastecimento[];
   fuelStats: {
     porVeiculo: {
@@ -141,7 +149,9 @@ interface FrotaWiseContextValue {
     vehIds: string[],
     nextFuelings: Abastecimento[],
     nextMaints: Manutencao[],
-    label: string
+    label: string,
+    nextTrips?: Viagem[],
+    nextTires?: Pneu[]
   ) => string[];
   handleExportBackup: () => void;
   liveMode: boolean;
@@ -218,11 +228,25 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         ? arr.map((m) => ({ categoria: '', peca: '', km: null, ...m }))
         : INITIAL_MAINTENANCES
   );
-  const [fines, setFines] = useLocalState<Multa[]>('ecofrota_v3_fines', liveMode ? [] : INITIAL_FINES);
+  const [fines, setFines] = useLocalState<Multa[]>(
+    'ecofrota_v3_fines',
+    liveMode ? [] : INITIAL_FINES,
+    // Multas antigas recebem o ID único (codigo) sem perder nenhum outro dado.
+    (arr) => (Array.isArray(arr) ? normalizarMultas(arr) : INITIAL_FINES)
+  );
   const [fuelings, setFuelings] = useLocalState<Abastecimento[]>(
     'ecofrota_v3_fuelings',
     [],
-    (arr) => (Array.isArray(arr) ? arr.map((f) => ({ tipo: 'Diesel', fornecedor: '', ...f })) : [])
+    (arr) =>
+      Array.isArray(arr)
+        ? arr.map((f) => ({ tipo: 'Diesel', fornecedor: '', viagemId: null, ...f }))
+        : []
+  );
+  // Viagens: módulo local (modo DEMO). O abastecimento NÃO depende de viagem.
+  const [trips, setTrips] = useLocalState<Viagem[]>(
+    STORAGE_KEYS.TRIPS,
+    INITIAL_TRIPS,
+    (arr) => normalizarViagens(arr)
   );
   // O financeiro do modo DEMO é persistido no navegador. O modo API aguarda endpoints próprios.
   const [pagamentos, setPagamentos] = useLocalState<PagamentoPlano[]>(
@@ -393,6 +417,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   );
 
   const fuelMedias = useMemo(() => computeFuelMediaDetails(fuelings), [fuelings]);
+  const fuelKmDiffs = useMemo(() => computeFuelKmDiffs(fuelings), [fuelings]);
 
   const fuelRows = useMemo(
     () =>
@@ -464,6 +489,9 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
               Number.isFinite(Number(m.km))
           )
           .map((m) => ({ km: Number(m.km), data: m.data, origem: 'Manutenção' as const })),
+        ...trips
+          .filter((t) => t.veiculoId === v.id && t.kmFinal !== null && Number.isFinite(Number(t.kmFinal)))
+          .map((t) => ({ km: Number(t.kmFinal), data: t.data, origem: 'Viagem' as const })),
       ];
       const ult = regs.reduce<KmAtualLancado | null>(
         (a, x) => (!a || (x.data || '') > (a.data || '') || (x.data === a.data && x.km > a.km) ? x : a),
@@ -513,7 +541,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       })
     );
     return out;
-  }, [vehicles, maintenances, fuelings, company.regrasManutencao]);
+  }, [vehicles, maintenances, fuelings, trips, company.regrasManutencao]);
 
   const tireAlerts = liveMode ? remoteTireAlerts : locallyComputedTireAlerts;
   const preventiveList = liveMode ? remotePreventiveList : locallyComputedPreventiveList;
@@ -529,7 +557,9 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     vehIds: string[],
     nextFuelings: Abastecimento[],
     nextMaints: Manutencao[],
-    label: string
+    label: string,
+    nextTrips: Viagem[] = trips,
+    nextTires: Pneu[] = tires
   ) => {
     let vs = vehicles;
     let ts = tires;
@@ -538,7 +568,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       const v = vs.find((x) => x.id === id);
       if (!v) return;
       const antes = Number(v.kmAtual) || 0;
-      const novo = odometerFrom(v, vehicleLaunchKms(id, nextFuelings, nextMaints));
+      const novo = odometerFrom(v, vehicleLaunchKms(id, nextFuelings, nextMaints, nextTrips, nextTires));
       if (novo === antes) return;
       const r = applyOdometer(
         vs,
@@ -553,16 +583,15 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       mudancas.push(`${v.placa}: ${formatNumber(antes)} → ${formatNumber(novo)} km`);
     });
     if (mudancas.length) {
+      // Só o hodômetro do veículo muda; o KM de cada pneu vem das suas movimentações.
       setVehicles(vs);
-      setTires(ts);
+      if (ts !== tires) setTires(ts);
     }
     return mudancas;
   };
 
   const sufixoKm = (mud: string[]) =>
-    mud.length
-      ? ` Hodômetro ajustado (${mud.join('; ')}); pneus montados acompanharam.`
-      : '';
+    mud.length ? ` Hodômetro ajustado (${mud.join('; ')}).` : '';
 
   const startEditFuel = (f: Abastecimento) => {
     setEditingFuelId(f.id);
@@ -576,18 +605,22 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         `Excluir o abastecimento de ${f.data} (${formatDec(f.litros)} L · ${formatCurrency(
           f.valorTotal
         )})?
-O hodômetro e os pneus montados serão recalculados.`
+O hodômetro do veículo será recalculado e a despesa vinculada à viagem (se houver) será removida.`
       )
     )
       return;
     if (liveMode) { void runLiveMutation('delete', `/abastecimentos/${f.id}`, undefined, 'Abastecimento excluído.'); return; }
     const next = fuelings.filter((x) => x.id !== f.id);
     setFuelings(next);
+    // Remove só a despesa gerada por este abastecimento; despesas manuais ficam.
+    const nextTrips = sincronizarDespesaAbastecimento(trips, null, f.id);
+    setTrips(nextTrips);
     const mud = syncOdometers(
       [f.veiculoId],
       next,
       maintenances,
-      'exclusão de abastecimento'
+      'exclusão de abastecimento',
+      nextTrips
     );
     showToast('Abastecimento excluído.' + sufixoKm(mud));
   };
@@ -602,7 +635,7 @@ O hodômetro e os pneus montados serão recalculados.`
       typeof window !== 'undefined' &&
       !window.confirm(
         `Excluir a manutenção ${m.osNumero} (${m.descricao})?
-O hodômetro e os pneus montados serão recalculados.`
+O hodômetro do veículo será recalculado.`
       )
     )
       return;
@@ -626,6 +659,15 @@ O hodômetro e os pneus montados serão recalculados.`
     )
       return;
     if (liveMode) { void runLiveMutation('delete', `/multas/${f.id}`, undefined, 'Multa excluída.'); return; }
+    // Preserva o relacionamento: multa original com NIC vinculada não pode ser apagada.
+    const nicsVinculadas = fines.filter((x) => x.tipoLancamento === 'NIC' && x.multaOrigemId === f.id);
+    if (nicsVinculadas.length) {
+      showToast(
+        `A multa ${f.codigo || f.ait} possui ${nicsVinculadas.length} NIC vinculada(s). Exclua a(s) NIC antes de excluir a multa original.`,
+        'error'
+      );
+      return;
+    }
     setFines((p) => p.filter((x) => x.id !== f.id));
     setPagamentos((p) => p.filter((x) => !(x.origem === 'multa' && x.origemId === f.id)));
     showToast('Multa excluída.');
@@ -702,6 +744,7 @@ O histórico dele também será apagado.`
       maintenances,
       fines,
       fuelings,
+      trips,
       pagamentos,
       contas,
     };
@@ -732,6 +775,8 @@ O histórico dele também será apagado.`
         setFines,
         fuelings,
         setFuelings,
+        trips,
+        setTrips,
         pagamentos,
         setPagamentos,
         contas,
@@ -744,6 +789,7 @@ O histórico dele também será apagado.`
         totalStockTires,
         expensesByVehicleData,
         fuelMedias,
+        fuelKmDiffs,
         fuelRows,
         fuelStats,
         maintByCategory,

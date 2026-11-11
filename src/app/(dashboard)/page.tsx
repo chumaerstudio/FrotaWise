@@ -16,6 +16,7 @@ import {
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatCurrency, formatDec, formatNumber } from '@/services/api';
 import { Btn, Chip, Empty, Kpi, Plate, SectionHead } from '@/components/ui';
+import { getClassificacaoTone } from '@/services/statusTones';
 import {
   ExpensesByVehicleBarChart,
   MaintenanceByCategoryBarChart,
@@ -140,15 +141,7 @@ export default function DashboardPage() {
                 {tireAlerts.map((al, i) => (
                   <tr key={i}>
                     <td>
-                      <Chip
-                        tone={
-                          al.tipo === 'Sucatear'
-                            ? 'red'
-                            : al.tipo === 'Recapar'
-                            ? 'amber'
-                            : 'blue'
-                        }
-                      >
+                      <Chip tone={getClassificacaoTone(al.tipo)}>
                         {al.tipo}
                       </Chip>
                     </td>

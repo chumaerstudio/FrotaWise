@@ -8,6 +8,8 @@ import { findTireRule, normMedida, normTxt } from '@/services/pneusService';
 import { Btn, Chip, Empty, Field, SectionHead } from '@/components/ui';
 import { RegraManutencaoPreventiva, RegraModeloPneu } from '@/types/frotawise';
 import { httpClient } from '@/lib/http/client';
+import { normalizarViagens } from '@/services/viagensService';
+import { normalizarMultas } from '@/services/multasService';
 
 export default function MalhaPneusConfigPage() {
   const {
@@ -21,6 +23,7 @@ export default function MalhaPneusConfigPage() {
     setMaintenances,
     setFines,
     setFuelings,
+    setTrips,
     preventiveList,
     showToast,
     handleExportBackup,
@@ -51,8 +54,9 @@ export default function MalhaPneusConfigPage() {
         if (Array.isArray(p.vehicles)) setVehicles(p.vehicles);
         if (Array.isArray(p.tires)) setTires(p.tires);
         if (Array.isArray(p.maintenances)) setMaintenances(p.maintenances);
-        if (Array.isArray(p.fines)) setFines(p.fines);
+        if (Array.isArray(p.fines)) setFines(normalizarMultas(p.fines));
         if (Array.isArray(p.fuelings)) setFuelings(p.fuelings);
+        if (Array.isArray(p.trips)) setTrips(normalizarViagens(p.trips));
         showToast('Backup restaurado com sucesso!');
       } catch {
         showToast('Arquivo inválido. Selecione um backup .json do FrotaWise.', 'error');

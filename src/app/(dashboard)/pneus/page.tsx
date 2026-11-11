@@ -13,6 +13,7 @@ import {
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatNumber } from '@/services/api';
 import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
+import { getClassificacaoTone } from '@/services/statusTones';
 import { getVehicleChassisSlots } from '@/services/veiculosService';
 import { Btn, Chip, Empty, Field, SectionHead, TireChip, cx } from '@/components/ui';
 import { TipoOperacaoPneu } from '@/types/frotawise';
@@ -270,7 +271,7 @@ export default function PneusHubPage() {
                     icon={Plus}
                     onClick={() => openTireOperationModal(sel, 'AddKm')}
                   >
-                    Somar KM
+                    Lançar KM
                   </Btn>
                 </div>
               )}
@@ -536,17 +537,7 @@ export default function PneusHubPage() {
                         </div>
                       </td>
                       <td>
-                        <Chip
-                          tone={
-                            t.classificacao === 'Sucatear'
-                              ? 'red'
-                              : t.classificacao === 'Recapar'
-                              ? 'amber'
-                              : t.classificacao === 'Rodando'
-                              ? 'teal'
-                              : 'gray'
-                          }
-                        >
+                        <Chip tone={getClassificacaoTone(t.classificacao)}>
                           {t.classificacao}
                         </Chip>
                       </td>

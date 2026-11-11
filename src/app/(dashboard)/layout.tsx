@@ -21,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Users,
+  Route,
 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { APP_VERSION, LOGO_FROTAWISE, LOGO_FROTAWISE_ICON } from '@/services/api';
@@ -102,6 +103,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       label: 'Abastecimento',
       sub: 'Lançamentos de combustível, KM e média de consumo',
       icon: Fuel,
+      badge: null,
+    },
+    {
+      href: '/viagens',
+      label: 'Viagens',
+      sub: 'KM inicial e final, itens transportados e despesas de cada viagem',
+      icon: Route,
       badge: null,
     },
     {

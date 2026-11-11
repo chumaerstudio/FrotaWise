@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, LucideIcon } from 'lucide-react';
+import { X, Search, LucideIcon } from 'lucide-react';
 import { formatNumber } from '@/services/api';
 import { getTireRecapStyle } from '@/services/pneusService';
 import { Pneu } from '@/types/frotawise';
@@ -320,3 +320,37 @@ export const ModalCorporativo: React.FC<{
     </Modal>
   );
 };
+
+/**
+ * Filtro por placa: digite ou escolha uma placa da lista. A busca ignora hífen,
+ * espaços e maiúsculas/minúsculas e aceita trechos (ex.: "opg" ou "2469").
+ */
+export const PlateFilter: React.FC<{
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  plates: string[];
+}> = ({ id, value, onChange, plates }) => (
+  <div className="relative" style={{ minWidth: 220 }}>
+    <Search
+      size={15}
+      className="absolute"
+      style={{ left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--mute)', pointerEvents: 'none' }}
+    />
+    <input
+      type="search"
+      list={`${id}-list`}
+      aria-label="Filtrar por placa"
+      placeholder="Filtrar por placa"
+      className="inp mono"
+      style={{ paddingLeft: 34 }}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+    <datalist id={`${id}-list`}>
+      {plates.map((p) => (
+        <option key={p} value={p} />
+      ))}
+    </datalist>
+  </div>
+);

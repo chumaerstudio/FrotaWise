@@ -20,3 +20,9 @@ O Snapshot Frontend 3.5.0 introduziu dois novos domínios que exigem adendo no B
 | Abastecimentos | `GET/POST/PATCH/DELETE /v1/abastecimentos` | PROPOSTO | Exige `Idempotency-Key` no POST; ARLA fora da média km/l. |
 | Financeiro | `GET/POST /v1/manutencoes`, `GET/POST /v1/multas` | Homologado | NIC calculada pelo backend; manutenção aceita `peca?`. |
 | Dashboard | `GET /v1/dashboard/resumo`, `GET /v1/dashboard/preventivas` | PROPOSTO | Custos de combustível separados de manutenção. |
+
+---
+
+## Adendo — KM, viagens, NIC (ver `docs/ATUALIZACAO-KM-VIAGENS-MULTAS.md`)
+
+Campos/tabelas que o backend precisa suportar para liberar no modo API: `pneus_historico` (`tipo`, `km_inicial`, `km_final`, `km_veiculo`, `cancelada`), `abastecimentos.viagem_id` (opcional), tabelas de viagens/itens/despesas (despesa de abastecimento com `abastecimento_id` único) e `multas` (`codigo` único gerado no servidor, `tipo_lancamento`, `multa_origem_id`). Regra de KM do pneu: `kmRodados = km_final - km_inicial`, com `km_inicial` = último KM do pneu; o hodômetro do veículo não é somado aos pneus.

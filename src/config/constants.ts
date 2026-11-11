@@ -12,6 +12,7 @@ export const STORAGE_KEYS = Object.freeze({
   THEME: 'frotawise_ui_theme',
   PAGAMENTOS: 'ecofrota_v3_pagamentos',
   CONTAS: 'ecofrota_v3_contas',
+  TRIPS: 'ecofrota_v3_trips',
 });
 
 export function formatCurrencyBRL(value: number): string {

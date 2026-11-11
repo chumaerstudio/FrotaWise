@@ -79,6 +79,14 @@ export interface HistoricoPneu {
   obs?: string;
   motivo?: string;
   autorId?: string;
+  /** Movimentação individual do pneu: KM da movimentação = kmFinal - kmInicial. */
+  tipo?: TipoOperacaoPneu | 'Cadastro' | 'Ajuste';
+  kmInicial?: number;
+  kmFinal?: number;
+  /** Leitura absoluta do hodômetro do veículo na movimentação (nunca é somada ao KM do pneu). */
+  kmVeiculo?: number | null;
+  cancelada?: boolean;
+  canceladaEm?: string;
 }
 
 export type HistoricoVeiculoPneu = HistoricoPneu;
@@ -147,8 +155,16 @@ export interface Manutencao {
   integrarFinanceiro?: boolean;
 }
 
+export type TipoLancamentoMulta = 'Multa' | 'NIC';
+
 export interface Multa {
   id: string;
+  /** ID único gerado automaticamente pelo sistema (ex.: MUL-2026-0001). */
+  codigo?: string;
+  /** 'NIC' = lançamento próprio vinculado a uma multa original. Ausente = 'Multa'. */
+  tipoLancamento?: TipoLancamentoMulta;
+  /** `id` da multa original quando este lançamento é uma NIC. */
+  multaOrigemId?: string | null;
   ait: string;
   veiculoId: string;
   motivo: string;
@@ -196,12 +212,54 @@ export interface Abastecimento {
   valorTotal: number;
   km: number;
   fornecedor: string;
+  /** Vínculo opcional com uma viagem. O abastecimento nunca depende de viagem. */
+  viagemId?: string | null;
+}
+
+export interface ItemViagem {
+  id: string;
+  descricao: string;
+  valor: number;
+}
+
+export interface DespesaViagem {
+  id: string;
+  descricao: string;
+  valor: number;
+  data: string;
+  origem: 'manual' | 'abastecimento';
+  /** Preenchido nas despesas geradas por um abastecimento (chave de idempotência). */
+  abastecimentoId?: string;
+}
+
+export interface Viagem {
+  id: string;
+  numero: number;
+  veiculoId: string;
+  data: string;
+  origem?: string;
+  destino?: string;
+  kmInicial: number;
+  /** Vazio enquanto a viagem está em andamento. */
+  kmFinal: number | null;
+  itens: ItemViagem[];
+  despesas: DespesaViagem[];
+  obs?: string;
 }
 
 export interface KmAtualLancado {
   km: number;
   data: string | null;
-  origem: 'manutencao' | 'abastecimento' | 'operacao' | 'kmBase' | 'Abastecimento' | 'Manutenção' | 'Cadastro do veículo';
+  origem:
+    | 'manutencao'
+    | 'abastecimento'
+    | 'operacao'
+    | 'kmBase'
+    | 'Abastecimento'
+    | 'Manutenção'
+    | 'Viagem'
+    | 'Movimentação de pneu'
+    | 'Cadastro do veículo';
 }
 
 export type StatusAlertaPreventiva = 'sem' | 'vencida' | 'proxima' | 'ok';

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Disc, History, X } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import {
@@ -14,6 +14,23 @@ import {
   today,
 } from '@/services/api';
 import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
+import {
+  aplicarAjusteKm,
+  calcularKmMovimentacao,
+  cancelarMovimentacao,
+  editarKmFinalMovimentacao,
+  kmInicialDaProximaMovimentacao,
+  registrarMovimentacao,
+  ultimaMovimentacaoEditavel,
+} from '@/services/pneuKmService';
+import { getClassificacaoTone, getVeiculoStatusTone } from '@/services/statusTones';
+import { sincronizarDespesaAbastecimento } from '@/services/viagensService';
+import {
+  ehNic,
+  gerarCodigoMulta,
+  multasVinculaveis,
+  normPlaca,
+} from '@/services/multasService';
 import {
   cmpFuel,
   computeFuelMedias,
@@ -32,7 +49,15 @@ import {
   SectionHead,
 } from '@/components/ui';
 import { useRouter } from 'next/navigation';
-import type { PagamentoPlano, StatusMulta, TipoCombustivel, TipoManutencao } from '@/types/frotawise';
+import type {
+  Multa,
+  Pneu,
+  PagamentoPlano,
+  StatusMulta,
+  TipoCombustivel,
+  TipoManutencao,
+  TipoOperacaoPneu,
+} from '@/types/frotawise';
 
 export const GlobalModals: React.FC = () => {
   const router = useRouter();
@@ -48,6 +73,8 @@ export const GlobalModals: React.FC = () => {
     setFines,
     fuelings,
     setFuelings,
+    trips,
+    setTrips,
     pagamentos,
     setPagamentos,
     showToast,
@@ -93,9 +120,16 @@ export const GlobalModals: React.FC = () => {
   const [actionBandaInput, setActionBandaInput] = useState('');
   const [actionFornecedorInput, setActionFornecedorInput] = useState('');
   const [actionValorInput, setActionValorInput] = useState('');
+  const [actionKmVeiculoInput, setActionKmVeiculoInput] = useState('');
+  // Chave de idempotência da movimentação: nova a cada abertura do modal.
+  const [actionMovId, setActionMovId] = useState('');
+  const movimentosEnviados = useRef(new Set<string>());
+  const [historyEdit, setHistoryEdit] = useState<{ id: string; kmFinal: string } | null>(null);
 
   useEffect(() => {
     if (tireActionModal) {
+      setActionMovId(`mov-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+      setActionKmVeiculoInput('');
       setActionKmInput('');
       setActionObsInput('');
       setActionStockLocInput(tireActionModal.tire.localEstoque || 'Prateleira A-01');
@@ -205,6 +239,9 @@ export const GlobalModals: React.FC = () => {
     data: today(),
     pontos: 4,
     valor: '',
+    tipoLancamento: 'Multa' as 'Multa' | 'NIC',
+    multaOrigemId: '',
+    buscaOrigem: '',
   });
   const [fineForm, setFineForm] = useState(emptyFine());
 
@@ -221,7 +258,10 @@ export const GlobalModals: React.FC = () => {
           status: f.status,
           data: f.data,
           pontos: f.pontos ?? 4,
-          valor: String(f.valorOriginal ?? f.valor),
+          valor: String(ehNic(f) ? f.valor : f.valorOriginal ?? f.valor),
+          tipoLancamento: ehNic(f) ? 'NIC' : 'Multa',
+          multaOrigemId: f.multaOrigemId || '',
+          buscaOrigem: '',
           integrarFinanceiro: f.integrarFinanceiro !== false,
           pgForma: pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.forma || 'avista',
           pgParcelas: String(pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.parcelas || 2),
@@ -241,6 +281,7 @@ export const GlobalModals: React.FC = () => {
     valorUnit: '',
     km: '',
     fornecedor: '',
+    viagemId: '',
   });
   const [fuelForm, setFuelForm] = useState(emptyFuel());
 
@@ -256,6 +297,7 @@ export const GlobalModals: React.FC = () => {
           valorUnit: String(f.valorUnit),
           km: String(f.km),
           fornecedor: f.fornecedor || '',
+          viagemId: f.viagemId || '',
         });
       }
     } else if (!showFuelModal) {
@@ -328,20 +370,106 @@ export const GlobalModals: React.FC = () => {
   };
 
   const sufixoKm = (mud: string[]) =>
-    mud.length
-      ? ` Hodômetro ajustado (${mud.join('; ')}); pneus montados acompanharam.`
-      : '';
+    mud.length ? ` Hodômetro ajustado (${mud.join('; ')}).` : '';
+
+  /** Leitura derivada do modal de movimentação (KM inicial vem sempre do próprio pneu). */
+  const tireActionInfo = () => {
+    if (!tireActionModal) return null;
+    const { tire, targetAction, targetVehicleId } = tireActionModal;
+    const tireNow = tires.find((t) => t.id === tire.id) ?? tire;
+    const kmInicial = kmInicialDaProximaMovimentacao(tireNow);
+    const kmFinal = actionKmInput === '' ? null : Number(actionKmInput);
+    const calc = calcularKmMovimentacao(kmInicial, kmFinal);
+    const veiculoId = tireNow.veiculoAtualId || (targetAction === 'Mount' ? targetVehicleId : '');
+    const veiculo = vehicles.find((v) => v.id === veiculoId);
+    return { tireNow, kmInicial, kmFinal, calc, veiculo };
+  };
+
+  const applyTireOperation = (
+    t: Pneu,
+    action: TipoOperacaoPneu,
+    targetVehicleId: string,
+    targetSlotCode: string
+  ): Pneu => {
+    if (action === 'Mount')
+      return {
+        ...t,
+        classificacao: 'Rodando',
+        veiculoAtualId: targetVehicleId,
+        posicaoAtual: targetSlotCode,
+        localEstoque: '',
+      };
+    if (action === 'Estocar')
+      return {
+        ...t,
+        classificacao: 'Estocar',
+        veiculoAtualId: '',
+        posicaoAtual: '',
+        localEstoque: actionStockLocInput || 'Almoxarifado Geral',
+      };
+    if (action === 'Recapar')
+      return {
+        ...t,
+        classificacao: 'Recapar',
+        veiculoAtualId: '',
+        posicaoAtual: '',
+        localEstoque: 'Em Recapadora Externa',
+        tipoBanda: actionBandaInput,
+        reformas: [
+          ...(t.reformas || []),
+          {
+            id: 'r-' + Date.now(),
+            data: today(),
+            ciclo: (Number(t.recapagens) || 0) + 1,
+            tipoBanda: actionBandaInput,
+            fornecedor: actionFornecedorInput.trim(),
+            valor: Number(actionValorInput) || 0,
+          },
+        ],
+      };
+    if (action === 'Sucatear')
+      return {
+        ...t,
+        classificacao: 'Sucatear',
+        veiculoAtualId: '',
+        posicaoAtual: '',
+        localEstoque: 'Baixa / Sucata',
+      };
+    return t;
+  };
 
   const handleConfirmTireOperation = (e: React.FormEvent) => {
     e.preventDefault();
+    const info = tireActionInfo();
+    if (!tireActionModal || !info) return;
+    const { tire, targetAction, targetVehicleId, targetSlotCode } = tireActionModal;
+    const { tireNow, kmInicial, kmFinal, calc, veiculo } = info;
+    if (!calc.ok) {
+      showToast(calc.erro, 'error');
+      return;
+    }
+    const kmVeic = actionKmVeiculoInput === '' ? null : Number(actionKmVeiculoInput);
+    if (kmVeic !== null) {
+      if (!Number.isFinite(kmVeic) || kmVeic < 0) {
+        showToast('Informe um KM do veículo válido.', 'error');
+        return;
+      }
+      if (veiculo && kmVeic < (Number(veiculo.kmAtual) || 0)) {
+        showToast(
+          `KM do veículo menor que o hodômetro atual de ${veiculo.placa} (${formatNumber(veiculo.kmAtual)} km).`,
+          'error'
+        );
+        return;
+      }
+    }
+
     if (liveMode) {
-      if (!tireActionModal) return;
-      const { tire, targetAction, targetVehicleId, targetSlotCode } = tireActionModal;
+      // Contrato do backend: kmRodados = KM final − KM inicial (o KM inicial é o último KM do pneu).
       const ok = awaitLive('post', `/pneus/${tire.id}/operacao`, {
         targetAction,
         targetVehicleId: targetAction === 'Mount' ? targetVehicleId : null,
         targetSlotCode: targetAction === 'Mount' ? targetSlotCode : null,
-        kmRodados: actionKmInput === '' ? null : Math.max(0, Number(actionKmInput)),
+        kmRodados: kmFinal === null ? null : calc.km,
         localEstoque: actionStockLocInput || 'Almoxarifado Geral',
         tipoBanda: actionBandaInput || null,
         fornecedor: actionFornecedorInput || null,
@@ -351,91 +479,93 @@ export const GlobalModals: React.FC = () => {
       void ok.then(success => { if (success) { setTireActionModal(null); setSelectedTireForActionId(null); }});
       return;
     }
-    if (!tireActionModal) return;
-    const { tire, targetAction, targetVehicleId, targetSlotCode } = tireActionModal;
-    const kmToAdd = Math.max(0, Number(actionKmInput) || 0);
-    const currentVehicle = vehicles.find((v) => v.id === tire.veiculoAtualId);
-    const targetVehicle = vehicles.find((v) => v.id === targetVehicleId);
 
-    setTires((prev) =>
-      prev.map((t) => {
-        if (t.id !== tire.id) return t;
-        const hist = [...(t.historicoVeiculos || [])];
-        if (kmToAdd > 0) {
-          hist.push({
-            id: 'h-' + Date.now(),
-            placa: currentVehicle
-              ? currentVehicle.placa
-              : targetVehicle
-              ? targetVehicle.placa
-              : 'AVULSO',
-            modelo: currentVehicle
-              ? currentVehicle.modelo
-              : targetVehicle
-              ? targetVehicle.modelo
-              : 'Lançamento Manual',
-            kmRodados: kmToAdd,
-            data: today(),
-            obs:
-              actionObsInput.trim() ||
-              (targetAction === 'AddKm'
-                ? 'Lançamento de KM no veículo'
-                : `Operação (${targetAction}) na posição ${t.posicaoAtual || 'Estoque'}`),
-          });
-        }
-        const km = (Number(t.kmTotal) || 0) + kmToAdd;
-        const base = { ...t, kmTotal: km, historicoVeiculos: hist };
-        if (targetAction === 'Mount')
-          return {
-            ...base,
-            classificacao: 'Rodando',
-            veiculoAtualId: targetVehicleId,
-            posicaoAtual: targetSlotCode,
-            localEstoque: '',
-          };
-        if (targetAction === 'Estocar')
-          return {
-            ...base,
-            classificacao: 'Estocar',
-            veiculoAtualId: '',
-            posicaoAtual: '',
-            localEstoque: actionStockLocInput || 'Almoxarifado Geral',
-          };
-        if (targetAction === 'Recapar')
-          return {
-            ...base,
-            classificacao: 'Recapar',
-            veiculoAtualId: '',
-            posicaoAtual: '',
-            localEstoque: 'Em Recapadora Externa',
-            tipoBanda: actionBandaInput,
-            reformas: [
-              ...(t.reformas || []),
-              {
-                id: 'r-' + Date.now(),
-                data: today(),
-                ciclo: (Number(t.recapagens) || 0) + 1,
-                tipoBanda: actionBandaInput,
-                fornecedor: actionFornecedorInput.trim(),
-                valor: Number(actionValorInput) || 0,
-              },
-            ],
-          };
-        if (targetAction === 'Sucatear')
-          return {
-            ...base,
-            classificacao: 'Sucatear',
-            veiculoAtualId: '',
-            posicaoAtual: '',
-            localEstoque: 'Baixa / Sucata',
-          };
-        return base;
-      })
+    // Duplo clique/novo envio da mesma movimentação: ignora (não soma KM duas vezes).
+    if (movimentosEnviados.current.has(actionMovId)) return;
+    movimentosEnviados.current.add(actionMovId);
+
+    const currentVehicle = vehicles.find((v) => v.id === tireNow.veiculoAtualId);
+    const targetVehicle = vehicles.find((v) => v.id === targetVehicleId);
+    const refVeh = currentVehicle ?? targetVehicle;
+    const mov = registrarMovimentacao(tireNow, {
+      movId: actionMovId,
+      tipo: targetAction,
+      data: today(),
+      kmFinal,
+      placa: refVeh ? refVeh.placa : 'AVULSO',
+      modelo: refVeh ? refVeh.modelo : 'Lançamento Manual',
+      veiculoId: refVeh?.id,
+      kmVeiculo: kmVeic,
+      obs:
+        actionObsInput.trim() ||
+        (targetAction === 'AddKm'
+          ? 'Lançamento de KM do pneu'
+          : `Operação (${targetAction}) na posição ${tireNow.posicaoAtual || 'Estoque'}`),
+    });
+    if (mov.erro || mov.duplicada) {
+      if (mov.erro) showToast(mov.erro, 'error');
+      return;
+    }
+    // O KM entra no próprio pneu (inclusive estepe) por esta movimentação, em qualquer posição.
+    const nextTires = tires.map((t) =>
+      t.id === tire.id ? applyTireOperation(mov.tire, targetAction, targetVehicleId, targetSlotCode) : t
     );
+    setTires(nextTires);
+    const mud =
+      kmVeic !== null && refVeh
+        ? syncOdometers([refVeh.id], fuelings, maintenances, 'movimentação de pneu', trips, nextTires)
+        : [];
 
     setSelectedTireForActionId(null);
     setTireActionModal(null);
-    showToast(`Pneu Fogo #${tire.fogo} atualizado com sucesso!`);
+    showToast(
+      `Pneu Fogo #${tire.fogo} atualizado: ${formatNumber(kmInicial)} → ${formatNumber(
+        calc.kmFinal
+      )} km (+${formatNumber(calc.km)} km).` + sufixoKm(mud)
+    );
+  };
+
+  const handleEditTireMovement = (tireId: string, movId: string) => {
+    if (!historyEdit) return;
+    const t = tires.find((x) => x.id === tireId);
+    if (!t) return;
+    const res = editarKmFinalMovimentacao(t, movId, Number(historyEdit.kmFinal));
+    if (res.erro) {
+      showToast(res.erro, 'error');
+      return;
+    }
+    if (res.duplicada) {
+      setHistoryEdit(null);
+      return;
+    }
+    const nextTires = tires.map((x) => (x.id === tireId ? res.tire : x));
+    setTires(nextTires);
+    const ids = Array.from(new Set((t.historicoVeiculos || []).map((h) => h.veiculoId).filter(Boolean) as string[]));
+    const mud = syncOdometers(ids, fuelings, maintenances, 'edição de movimentação de pneu', trips, nextTires);
+    setHistoryEdit(null);
+    showToast(`Movimentação atualizada: pneu com ${formatNumber(res.tire.kmTotal)} km.` + sufixoKm(mud));
+  };
+
+  const handleCancelTireMovement = (tireId: string, movId: string) => {
+    const t = tires.find((x) => x.id === tireId);
+    if (!t) return;
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        'Cancelar esta movimentação? O KM dela será estornado do pneu. A posição/local atual do pneu não é alterada.'
+      )
+    )
+      return;
+    const res = cancelarMovimentacao(t, movId, today());
+    if (res.erro) {
+      showToast(res.erro, 'error');
+      return;
+    }
+    const nextTires = tires.map((x) => (x.id === tireId ? res.tire : x));
+    setTires(nextTires);
+    const ids = Array.from(new Set((t.historicoVeiculos || []).map((h) => h.veiculoId).filter(Boolean) as string[]));
+    const mud = syncOdometers(ids, fuelings, maintenances, 'cancelamento de movimentação de pneu', trips, nextTires);
+    showToast(`Movimentação cancelada: pneu volta a ${formatNumber(res.tire.kmTotal)} km.` + sufixoKm(mud));
   };
 
   const handleCreateVehicle = (e: React.FormEvent) => {
@@ -507,6 +637,9 @@ export const GlobalModals: React.FC = () => {
                 placa: 'CADASTRO-INICIAL',
                 modelo: 'Histórico Anterior',
                 kmRodados: kmIni,
+                tipo: 'Cadastro' as const,
+                kmInicial: 0,
+                kmFinal: kmIni,
                 data: today(),
                 obs: 'Quilometragem inicial no cadastro',
               },
@@ -537,16 +670,22 @@ export const GlobalModals: React.FC = () => {
     setTires((p) =>
       p.map((t) =>
         t.id === editingTireId
-          ? {
-              ...t,
-              fogo: tireForm.fogo.toUpperCase().trim(),
-              marca: tireForm.marca.trim(),
-              medida: tireForm.medida.trim() || t.medida,
-              sulcoMm: tireForm.sulcoMm === '' ? t.sulcoMm : Number(tireForm.sulcoMm),
-              recapagens: Math.max(0, Number(tireForm.recapagens) || 0),
-              kmTotal: Math.max(0, Number(tireForm.kmInicial) || 0),
-              localEstoque: tireForm.localEstoque.trim() || t.localEstoque,
-            }
+          ? // Alteração manual do KM acumulado vira um lançamento de ajuste no histórico,
+            // para o KM do pneu continuar igual à soma das suas movimentações.
+            aplicarAjusteKm(
+              {
+                ...t,
+                fogo: tireForm.fogo.toUpperCase().trim(),
+                marca: tireForm.marca.trim(),
+                medida: tireForm.medida.trim() || t.medida,
+                sulcoMm: tireForm.sulcoMm === '' ? t.sulcoMm : Number(tireForm.sulcoMm),
+                recapagens: Math.max(0, Number(tireForm.recapagens) || 0),
+                localEstoque: tireForm.localEstoque.trim() || t.localEstoque,
+              },
+              Math.max(0, Number(tireForm.kmInicial) || 0),
+              `aj-${Date.now()}`,
+              today()
+            )
           : t
       )
     );
@@ -568,7 +707,9 @@ export const GlobalModals: React.FC = () => {
           vehicleLaunchKms(
             veh.id,
             fuelings,
-            maintenances.filter((m) => m.id !== excludeId)
+            maintenances.filter((m) => m.id !== excludeId),
+            trips,
+            tires
           )
         )
       : Number(veh.kmAtual) || 0;
@@ -602,6 +743,10 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
+    if (maintenanceForm.tipo === 'Pneus / Recapagem') {
+      showToast('Pneus e recapagens são lançados em Pneus e estoque, pelas movimentações do pneu.', 'error');
+      return;
+    }
     if (!liveMode && !validatePaymentPlan(maintenanceForm)) return;
     if (liveMode) {
       if (!maintenanceForm.veiculoId || !maintenanceForm.descricao.trim() || !maintenanceForm.categoria) return;
@@ -651,36 +796,12 @@ export const GlobalModals: React.FC = () => {
     let msg = 'Despesa de manutenção registrada!';
     const delta = km - (Number(veh.kmAtual) || 0);
     if (delta > 0) {
+      // A manutenção atualiza só o hodômetro do veículo (leitura absoluta).
+      // O KM dos pneus continua vindo das movimentações individuais de cada pneu.
       setVehicles((p) => p.map((v) => (v.id === veh.id ? { ...v, kmAtual: km } : v)));
-      const rolando = (t: typeof tires[0]) =>
-        t.veiculoAtualId === veh.id && t.posicaoAtual !== 'ESTEPE-1';
-      const qtd = tires.filter(rolando).length;
-      if (qtd) {
-        setTires((p) =>
-          p.map((t) =>
-            rolando(t)
-              ? {
-                  ...t,
-                  kmTotal: (Number(t.kmTotal) || 0) + delta,
-                  historicoVeiculos: [
-                    ...(t.historicoVeiculos || []),
-                    {
-                      id: `h-${Date.now()}-${t.id}`,
-                      placa: veh.placa,
-                      modelo: veh.modelo,
-                      kmRodados: delta,
-                      data: date,
-                      obs: `Sincronizado com o hodômetro (${nm.osNumero})`,
-                    },
-                  ],
-                }
-              : t
-          )
-        );
-      }
       msg = `Manutenção registrada. Hodômetro de ${veh.placa}: ${formatNumber(
         km
-      )} km (+${formatNumber(delta)}); ${qtd} pneus montados somaram o mesmo KM.`;
+      )} km (+${formatNumber(delta)}).`;
     }
     closeMaintenanceModal();
     showToast(msg);
@@ -742,6 +863,12 @@ export const GlobalModals: React.FC = () => {
     showToast('Manutenção atualizada!' + sufixoKm(mud));
   };
 
+  /**
+   * Validação de KM do abastecimento.
+   * A referência é a quilometragem das VIAGENS (e dos abastecimentos anteriores do veículo),
+   * não mais a das manutenções. A viagem é opcional: sem viagem vinculada vale o hodômetro
+   * atual do veículo, e a ausência de viagem nunca bloqueia o lançamento.
+   */
   const checkFuelKm = (form: typeof fuelForm, excludeId?: string | null) => {
     const veh = vehicles.find((v) => v.id === form.veiculoId);
     const km = Math.round(Number(form.km));
@@ -749,34 +876,26 @@ export const GlobalModals: React.FC = () => {
     if (form.km === '' || !Number.isFinite(km) || km < 0)
       return { erro: 'Informe a quilometragem do veículo neste abastecimento.', veh, km };
     const date = form.data;
+    const viagem = form.viagemId ? trips.find((t) => t.id === form.viagemId) : undefined;
+    if (form.viagemId && !viagem) return { erro: 'Viagem selecionada não encontrada.', veh, km };
+    if (viagem && viagem.veiculoId !== veh.id)
+      return { erro: `A viagem nº ${viagem.numero} pertence a outro veículo.`, veh, km };
+
     const baseOdo = excludeId
       ? odometerFrom(
           veh,
           vehicleLaunchKms(
             veh.id,
             fuelings.filter((f) => f.id !== excludeId),
-            maintenances
+            maintenances,
+            trips,
+            tires
           )
         )
       : Number(veh.kmAtual) || 0;
-    const serie = [
-      ...fuelings
-        .filter((f) => f.veiculoId === veh.id && f.id !== excludeId)
-        .map((f) => ({ data: f.data, km: Number(f.km), rotulo: `abastecimento de ${f.data}` })),
-      ...maintenances
-        .filter(
-          (m) =>
-            m.veiculoId === veh.id &&
-            m.km !== null &&
-            m.km !== undefined &&
-            Number.isFinite(Number(m.km))
-        )
-        .map((m) => ({
-          data: m.data,
-          km: Number(m.km),
-          rotulo: `manutenção ${m.osNumero} de ${m.data}`,
-        })),
-    ];
+    const serie = fuelings
+      .filter((f) => f.veiculoId === veh.id && f.id !== excludeId)
+      .map((f) => ({ data: f.data, km: Number(f.km), rotulo: `abastecimento de ${f.data}` }));
     const prev = serie
       .filter((x) => x.data <= date)
       .reduce<typeof serie[0] | null>(
@@ -786,14 +905,48 @@ export const GlobalModals: React.FC = () => {
     const next = serie
       .filter((x) => x.data > date)
       .reduce<typeof serie[0] | null>((a, x) => (!a || x.data < a.data ? x : a), null);
-    const isLatest = serie.every((x) => x.data <= date);
     let erro = '';
     if (prev && km < prev.km)
       erro = `KM menor que o registro anterior (${prev.rotulo}: ${formatNumber(prev.km)} km).`;
     else if (next && km > next.km)
       erro = `KM maior que o registro seguinte (${next.rotulo}: ${formatNumber(next.km)} km).`;
-    else if (isLatest && km < baseOdo)
-      erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(baseOdo)} km).`;
+
+    if (!erro && viagem) {
+      // Com viagem: o KM precisa estar dentro do trecho da viagem.
+      const ini = Number(viagem.kmInicial);
+      const fim = viagem.kmFinal !== null && viagem.kmFinal !== undefined ? Number(viagem.kmFinal) : null;
+      if (km < ini)
+        erro = `KM menor que o KM inicial da viagem nº ${viagem.numero} (${formatNumber(ini)} km).`;
+      else if (fim !== null && km > fim)
+        erro = `KM maior que o KM final da viagem nº ${viagem.numero} (${formatNumber(fim)} km).`;
+    } else if (!erro) {
+      // Sem viagem: referência = viagens do veículo em datas diferentes + hodômetro atual.
+      const dasViagens = trips.filter((t) => t.veiculoId === veh.id);
+      const anterior = dasViagens
+        .filter((t) => t.data < date && t.kmFinal !== null && t.kmFinal !== undefined)
+        .reduce<typeof dasViagens[0] | null>(
+          (a, t) => (!a || Number(t.kmFinal) > Number(a.kmFinal) ? t : a),
+          null
+        );
+      const seguinte = dasViagens
+        .filter((t) => t.data > date)
+        .reduce<typeof dasViagens[0] | null>(
+          (a, t) => (!a || Number(t.kmInicial) < Number(a.kmInicial) ? t : a),
+          null
+        );
+      const isLatest =
+        serie.every((x) => x.data <= date) && dasViagens.every((t) => t.data <= date);
+      if (anterior && km < Number(anterior.kmFinal))
+        erro = `KM menor que o KM final da viagem nº ${anterior.numero} (${formatNumber(
+          Number(anterior.kmFinal)
+        )} km em ${anterior.data}).`;
+      else if (seguinte && km > Number(seguinte.kmInicial))
+        erro = `KM maior que o KM inicial da viagem nº ${seguinte.numero} (${formatNumber(
+          Number(seguinte.kmInicial)
+        )} km em ${seguinte.data}).`;
+      else if (isLatest && km < baseOdo)
+        erro = `KM menor que o hodômetro atual de ${veh.placa} (${formatNumber(baseOdo)} km).`;
+    }
     return { erro, veh, km };
   };
 
@@ -827,42 +980,21 @@ export const GlobalModals: React.FC = () => {
       valorTotal: total,
       km,
       fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado',
+      viagemId: fuelForm.viagemId || null,
     };
     setFuelings((p) => [nf, ...p]);
+    // Com viagem: gera a despesa (id determinístico = sem duplicar). Sem viagem: nada a fazer.
+    const nextTrips = nf.viagemId ? sincronizarDespesaAbastecimento(trips, nf) : trips;
+    if (nf.viagemId) setTrips(nextTrips);
 
     let msg = `Abastecimento registrado: ${formatDec(litros)} L · ${formatCurrency(total)}.`;
+    const viagem = nf.viagemId ? trips.find((t) => t.id === nf.viagemId) : undefined;
+    if (viagem) msg += ` Despesa lançada na viagem nº ${viagem.numero}.`;
     const delta = km - (Number(veh.kmAtual) || 0);
     if (delta > 0) {
+      // O abastecimento atualiza só o hodômetro do veículo (leitura absoluta).
       setVehicles((p) => p.map((v) => (v.id === veh.id ? { ...v, kmAtual: km } : v)));
-      const rolando = (t: typeof tires[0]) =>
-        t.veiculoAtualId === veh.id && t.posicaoAtual !== 'ESTEPE-1';
-      const qtd = tires.filter(rolando).length;
-      if (qtd) {
-        setTires((p) =>
-          p.map((t) =>
-            rolando(t)
-              ? {
-                  ...t,
-                  kmTotal: (Number(t.kmTotal) || 0) + delta,
-                  historicoVeiculos: [
-                    ...(t.historicoVeiculos || []),
-                    {
-                      id: `h-${Date.now()}-${t.id}`,
-                      placa: veh.placa,
-                      modelo: veh.modelo,
-                      kmRodados: delta,
-                      data: fuelForm.data,
-                      obs: 'Sincronizado com o hodômetro (abastecimento)',
-                    },
-                  ],
-                }
-              : t
-          )
-        );
-      }
-      msg += ` Hodômetro de ${veh.placa}: ${formatNumber(km)} km (+${formatNumber(
-        delta
-      )}); ${qtd} pneus montados somaram o mesmo KM.`;
+      msg += ` Hodômetro de ${veh.placa}: ${formatNumber(km)} km (+${formatNumber(delta)}).`;
     }
     const med = computeFuelMedias([nf, ...fuelings])[nf.id];
     if (med !== null && med !== undefined) msg += ` Média: ${formatDec(med)} km/l.`;
@@ -903,10 +1035,15 @@ export const GlobalModals: React.FC = () => {
       valorTotal: Math.round(litros * unit * 100) / 100,
       km,
       fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado',
+      viagemId: fuelForm.viagemId || null,
     };
     const next = fuelings.map((f) => (f.id === old.id ? upd : f));
     setFuelings(next);
-    const mud = syncOdometers([old.veiculoId, veh.id], next, maintenances, 'edição de abastecimento');
+    // Remove a despesa antiga deste abastecimento (de qualquer viagem) e recria na viagem atual,
+    // se houver. Despesas manuais da viagem não são tocadas.
+    const nextTrips = sincronizarDespesaAbastecimento(trips, upd);
+    setTrips(nextTrips);
+    const mud = syncOdometers([old.veiculoId, veh.id], next, maintenances, 'edição de abastecimento', nextTrips);
     closeFuelModal();
     showToast('Abastecimento atualizado!' + sufixoKm(mud));
   };
@@ -925,11 +1062,51 @@ export const GlobalModals: React.FC = () => {
       return;
     }
     if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
+    if (fineForm.tipoLancamento === 'NIC') {
+      // NIC = lançamento próprio, vinculado (por ID) a uma multa original já cadastrada.
+      const original = fines.find((x) => x.id === fineForm.multaOrigemId);
+      if (!original || ehNic(original)) {
+        showToast('Selecione a multa original à qual esta NIC pertence.', 'error');
+        return;
+      }
+      const valorNic = Number(fineForm.valor) || 0;
+      if (!(valorNic > 0)) {
+        showToast('Informe o valor da NIC.', 'error');
+        return;
+      }
+      const nicRec: Multa = {
+        id: 'f-' + Date.now(),
+        codigo: gerarCodigoMulta(fines, fineForm.data),
+        tipoLancamento: 'NIC',
+        multaOrigemId: original.id,
+        ait: fineForm.ait.toUpperCase().trim() || original.ait,
+        veiculoId: original.veiculoId,
+        motivo: fineForm.motivo.trim(),
+        identificado: original.identificado,
+        motorista: original.motorista,
+        status: fineForm.status,
+        data: fineForm.data,
+        pontos: 0,
+        valorOriginal: 0,
+        valorNIC: valorNic,
+        valor: valorNic,
+        integrarFinanceiro: !!fineForm.integrarFinanceiro,
+      };
+      setFines((p) => [nicRec, ...p]);
+      if (nicRec.integrarFinanceiro) upsertPaymentPlan('multa', nicRec.id, fineForm, nicRec.data);
+      closeFineModal();
+      showToast(`NIC ${nicRec.codigo} lançada e vinculada à multa ${original.codigo || original.ait}.`);
+      return;
+    }
     const ident = fineForm.identificado !== false;
     const base = Number(fineForm.valor) || 0;
     const nic = ident ? 0 : base * NIC_MULTIPLICADOR;
-    const nf = {
+    const nf: Multa = {
       id: 'f-' + Date.now(),
+      // ID único gerado pelo sistema (o usuário não digita).
+      codigo: gerarCodigoMulta(fines, fineForm.data),
+      tipoLancamento: 'Multa',
+      multaOrigemId: null,
       ait: fineForm.ait.toUpperCase().trim() || `AIT-${Math.floor(10000 + Math.random() * 90000)}`,
       veiculoId: fineForm.veiculoId,
       motivo: fineForm.motivo.trim(),
@@ -948,8 +1125,8 @@ export const GlobalModals: React.FC = () => {
     closeFineModal();
     showToast(
       ident
-        ? 'Multa lançada nas despesas do veículo!'
-        : `Multa lançada com NIC: total ${formatCurrency(nf.valor)}.`
+        ? `Multa ${nf.codigo} lançada nas despesas do veículo!`
+        : `Multa ${nf.codigo} lançada com NIC: total ${formatCurrency(nf.valor)}.`
     );
   };
 
@@ -968,6 +1145,26 @@ export const GlobalModals: React.FC = () => {
     }
     const old = fines.find((f) => f.id === editingFineId);
     if (!old || !fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
+    if (ehNic(old)) {
+      // A NIC continua um lançamento próprio: só dados dela mudam; a multa original não é tocada.
+      const valorNic = Number(fineForm.valor) || 0;
+      const updNic: Multa = {
+        ...old,
+        ait: fineForm.ait.toUpperCase().trim() || old.ait,
+        motivo: fineForm.motivo.trim(),
+        status: fineForm.status,
+        data: fineForm.data,
+        valorNIC: valorNic,
+        valor: valorNic,
+        integrarFinanceiro: !!fineForm.integrarFinanceiro,
+      };
+      setFines((p) => p.map((f) => (f.id === old.id ? updNic : f)));
+      if (updNic.integrarFinanceiro) upsertPaymentPlan('multa', old.id, fineForm, updNic.data);
+      else removePaymentPlan('multa', old.id);
+      closeFineModal();
+      showToast('NIC atualizada!');
+      return;
+    }
     const ident = fineForm.identificado !== false;
     const base = Number(fineForm.valor) || 0;
     const nic = ident ? 0 : base * NIC_MULTIPLICADOR;
@@ -1034,7 +1231,7 @@ export const GlobalModals: React.FC = () => {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <Plate v={v} />
-                <Chip tone={v.status === 'Operando' ? 'teal' : 'amber'}>{v.status}</Chip>
+                <Chip tone={getVeiculoStatusTone(v.status)}>{v.status}</Chip>
               </div>
               <h2 className="ef-t20 font-semibold mt-2">{v.modelo}</h2>
               <div className="ef-t13" style={{ color: 'var(--mute)' }}>
@@ -1223,7 +1420,7 @@ export const GlobalModals: React.FC = () => {
         <Modal
           title={`Pneu Fogo #${tireActionModal.tire.fogo} · ${
             tireActionModal.targetAction === 'AddKm'
-              ? 'Somar KM'
+              ? 'Lançar KM'
               : tireActionModal.targetAction === 'Mount'
               ? `Montar em ${tireActionModal.targetSlotCode}`
               : tireActionModal.targetAction
@@ -1231,17 +1428,67 @@ export const GlobalModals: React.FC = () => {
           onClose={() => setTireActionModal(null)}
         >
           <form onSubmit={handleConfirmTireOperation} className="space-y-4">
-            <Field label="Quantos KM este pneu rodou neste trecho? (soma automática)">
-              <input
-                type="number"
-                min="0"
-                className="inp mono"
-                placeholder="Ex: 12000"
-                autoFocus
-                value={actionKmInput}
-                onChange={(e) => setActionKmInput(e.target.value)}
-              />
-            </Field>
+            {(() => {
+              const info = tireActionInfo();
+              if (!info) return null;
+              const { kmInicial, calc, veiculo } = info;
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="KM inicial do pneu (automático)">
+                      <input
+                        readOnly
+                        tabIndex={-1}
+                        className="inp mono"
+                        value={`${formatNumber(kmInicial)} km`}
+                        title="Último KM rodado registrado neste pneu"
+                      />
+                    </Field>
+                    <Field label="KM final do pneu">
+                      <input
+                        type="number"
+                        min={kmInicial}
+                        className="inp mono"
+                        placeholder={String(kmInicial)}
+                        autoFocus
+                        value={actionKmInput}
+                        onChange={(e) => setActionKmInput(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="KM da movimentação">
+                      <input
+                        readOnly
+                        tabIndex={-1}
+                        className="inp mono"
+                        style={calc.ok ? undefined : { borderColor: 'var(--red)', color: 'var(--red-ink)' }}
+                        value={calc.ok ? `+${formatNumber(calc.km)} km` : 'Inválido'}
+                      />
+                    </Field>
+                  </div>
+                  {!calc.ok && (
+                    <div className="ef-t12_5" style={{ color: 'var(--red-ink)' }}>
+                      {calc.erro}
+                    </div>
+                  )}
+                  {(veiculo || tireActionModal.targetVehicleId) && (
+                    <Field
+                      label={`KM do veículo${veiculo ? ` ${veiculo.placa}` : ''} (opcional · hodômetro atual ${
+                        veiculo ? formatNumber(veiculo.kmAtual) : '—'
+                      } km)`}
+                    >
+                      <input
+                        type="number"
+                        min={veiculo ? Number(veiculo.kmAtual) || 0 : 0}
+                        className="inp mono"
+                        placeholder="Leitura do hodômetro, se quiser atualizar o veículo"
+                        value={actionKmVeiculoInput}
+                        onChange={(e) => setActionKmVeiculoInput(e.target.value)}
+                      />
+                    </Field>
+                  )}
+                </>
+              );
+            })()}
             {tireActionModal.targetAction === 'Estocar' && (
               <Field label="Local no estoque">
                 <input
@@ -1306,15 +1553,27 @@ export const GlobalModals: React.FC = () => {
         </Modal>
       )}
 
-      {historyModalTire && (
+      {historyModalTire && (() => {
+        // Sempre o pneu atual do estado (nunca o instantâneo de quando o modal abriu),
+        // para KM, status e cor refletirem a última movimentação.
+        const hTire = tires.find((x) => x.id === historyModalTire.id) ?? historyModalTire;
+        const ultimaEditavel = ultimaMovimentacaoEditavel(hTire);
+        return (
         <Modal
           wide
-          title={`Histórico · Fogo #${historyModalTire.fogo} (${formatNumber(
-            historyModalTire.kmTotal
-          )} km)`}
-          onClose={() => setHistoryModalTire(null)}
+          title={`Histórico · Fogo #${hTire.fogo} (${formatNumber(hTire.kmTotal)} km)`}
+          onClose={() => {
+            setHistoryEdit(null);
+            setHistoryModalTire(null);
+          }}
         >
-          {(historyModalTire.historicoVeiculos || []).length === 0 ? (
+          <div className="flex items-center gap-2 mb-3 ef-t13">
+            <Chip tone={getClassificacaoTone(hTire.classificacao)}>{hTire.classificacao}</Chip>
+            <span style={{ color: 'var(--mute)' }}>
+              KM acumulado do pneu = soma das movimentações válidas abaixo
+            </span>
+          </div>
+          {(hTire.historicoVeiculos || []).length === 0 ? (
             <Empty
               icon={History}
               title="Sem histórico"
@@ -1325,13 +1584,13 @@ export const GlobalModals: React.FC = () => {
               className="relative ml-2 max-h-80 overflow-y-auto"
               style={{ borderLeft: '2px solid var(--line)' }}
             >
-              {historyModalTire.historicoVeiculos.map((h) => (
-                <li key={h.id} className="pl-5 pb-5 relative">
+              {[...hTire.historicoVeiculos].reverse().map((h) => (
+                <li key={h.id} className="pl-5 pb-5 relative" style={h.cancelada ? { opacity: 0.55 } : undefined}>
                   <i
                     className="absolute top-1 w-3 h-3 rounded-full"
                     style={{
                       left: -7,
-                      background: 'var(--teal)',
+                      background: h.cancelada ? 'var(--line4)' : 'var(--teal)',
                       boxShadow: '0 0 0 3px var(--card)',
                     }}
                   />
@@ -1341,22 +1600,64 @@ export const GlobalModals: React.FC = () => {
                       <span style={{ color: 'var(--ink2)' }}>· {h.modelo}</span>
                       <div className="ef-t12_5" style={{ color: 'var(--mute)' }}>
                         {h.data} · {h.obs}
+                        {h.tipo ? ` · ${h.tipo === 'AddKm' ? 'Lançamento de KM' : h.tipo}` : ''}
                       </div>
+                      {h.kmInicial !== undefined && h.kmFinal !== undefined && (
+                        <div className="mono ef-t12_5" style={{ color: 'var(--ink2)' }}>
+                          KM {formatNumber(h.kmInicial)} → {formatNumber(h.kmFinal)}
+                          {h.kmVeiculo != null ? ` · hodômetro do veículo ${formatNumber(h.kmVeiculo)} km` : ''}
+                        </div>
+                      )}
+                      {ultimaEditavel?.id === h.id && !h.cancelada && (
+                        <div className="mt-2">
+                          {historyEdit?.id === h.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={h.kmInicial}
+                                className="inp mono"
+                                style={{ width: 130 }}
+                                value={historyEdit.kmFinal}
+                                onChange={(e) => setHistoryEdit({ id: h.id, kmFinal: e.target.value })}
+                              />
+                              <Btn sm v="primary" onClick={() => handleEditTireMovement(hTire.id, h.id)}>
+                                Salvar KM final
+                              </Btn>
+                              <Btn sm onClick={() => setHistoryEdit(null)}>
+                                Voltar
+                              </Btn>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Btn sm onClick={() => setHistoryEdit({ id: h.id, kmFinal: String(h.kmFinal ?? '') })}>
+                                Editar KM final
+                              </Btn>
+                              <Btn sm className="ef-del" onClick={() => handleCancelTireMovement(hTire.id, h.id)}>
+                                Cancelar movimentação
+                              </Btn>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <Chip tone={h.kmRodados != null && h.kmRodados < 0 ? 'red' : 'teal'}>
-                      {h.kmRodados == null
-                        ? 'Km não informado'
-                        : `${h.kmRodados < 0 ? '' : '+'}${formatNumber(h.kmRodados)} km`}
-                    </Chip>
+                    {h.cancelada ? (
+                      <Chip tone="gray">Cancelada</Chip>
+                    ) : (
+                      <Chip tone={h.kmRodados != null && h.kmRodados < 0 ? 'red' : 'teal'}>
+                        {h.kmRodados == null
+                          ? 'Km não informado'
+                          : `${h.kmRodados < 0 ? '' : '+'}${formatNumber(h.kmRodados)} km`}
+                      </Chip>
+                    )}
                   </div>
                 </li>
               ))}
             </ol>
           )}
-          {(historyModalTire.reformas || []).length > 0 && (
+          {(hTire.reformas || []).length > 0 && (
             <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--line)' }}>
               <h4 className="ef-t14 font-semibold mb-2">Reformas (recapagens)</h4>
-              {historyModalTire.reformas?.map((r) => (
+              {hTire.reformas?.map((r) => (
                 <div key={r.id} className="flex items-start justify-between gap-3 ef-py1_5 ef-t13">
                   <div>
                     <b>{r.ciclo}ª recapagem</b> · banda {r.tipoBanda || '—'}
@@ -1370,7 +1671,8 @@ export const GlobalModals: React.FC = () => {
             </div>
           )}
         </Modal>
-      )}
+        );
+      })()}
 
       {showVehicleModal && (
         <Modal title="Cadastrar veículo" onClose={() => setShowVehicleModal(false)}>
@@ -1615,7 +1917,11 @@ export const GlobalModals: React.FC = () => {
                 >
                   <option>Preventiva</option>
                   <option>Corretiva</option>
-                  <option>Pneus / Recapagem</option>
+                  {/* Pneus/Recapagem saiu dos novos lançamentos (use Pneus e estoque).
+                      A opção só aparece ao editar um registro histórico que já a usa. */}
+                  {maintenanceForm.tipo === 'Pneus / Recapagem' && editingMaintId && (
+                    <option>Pneus / Recapagem</option>
+                  )}
                 </select>
               </Field>
             </div>
@@ -1780,7 +2086,7 @@ export const GlobalModals: React.FC = () => {
                 required
                 className="inp"
                 value={fuelForm.veiculoId}
-                onChange={(e) => setFuelForm({ ...fuelForm, veiculoId: e.target.value })}
+                onChange={(e) => setFuelForm({ ...fuelForm, veiculoId: e.target.value, viagemId: '' })}
               >
                 <option value="">Selecione o veículo...</option>
                 {vehicles.map((v) => (
@@ -1790,6 +2096,32 @@ export const GlobalModals: React.FC = () => {
                 ))}
               </select>
             </Field>
+            {!liveMode && (
+              <Field label="Viagem (opcional)">
+                <select
+                  className="inp"
+                  disabled={!fuelForm.veiculoId}
+                  value={fuelForm.viagemId}
+                  onChange={(e) => setFuelForm({ ...fuelForm, viagemId: e.target.value })}
+                >
+                  <option value="">Sem viagem — abastecimento avulso</option>
+                  {trips
+                    .filter((t) => t.veiculoId === fuelForm.veiculoId)
+                    .sort((a, b) => b.numero - a.numero)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        Viagem nº {t.numero} · {t.data}
+                        {t.kmFinal === null ? ' · em andamento' : ''}
+                      </option>
+                    ))}
+                </select>
+                <span className="block ef-t12 mt-1" style={{ color: 'var(--mute)' }}>
+                  {fuelForm.viagemId
+                    ? 'O valor total será lançado como despesa de abastecimento desta viagem.'
+                    : 'Sem viagem, o abastecimento é salvo normalmente no histórico do veículo.'}
+                </span>
+              </Field>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Combustível">
                 <select
@@ -1930,14 +2262,127 @@ export const GlobalModals: React.FC = () => {
       {showFineModal && (
         <Modal
           wide
-          title={editingFineId ? 'Editar multa' : 'Lançar multa'}
+          title={
+            editingFineId
+              ? fineForm.tipoLancamento === 'NIC'
+                ? 'Editar NIC'
+                : 'Editar multa'
+              : fineForm.tipoLancamento === 'NIC'
+              ? 'Lançar NIC'
+              : 'Lançar multa'
+          }
           onClose={closeFineModal}
         >
           <form onSubmit={editingFineId ? handleUpdateFine : handleCreateFine} className="space-y-3">
+            {!liveMode && !editingFineId && (
+              <div>
+                <span className="lbl">Tipo de lançamento</span>
+                <div className="seg">
+                  <button
+                    type="button"
+                    className={fineForm.tipoLancamento === 'Multa' ? 'on' : ''}
+                    onClick={() => setFineForm({ ...emptyFine(), tipoLancamento: 'Multa', veiculoId: fineForm.veiculoId })}
+                  >
+                    Multa
+                  </button>
+                  <button
+                    type="button"
+                    className={fineForm.tipoLancamento === 'NIC' ? 'on' : ''}
+                    onClick={() => setFineForm({ ...emptyFine(), tipoLancamento: 'NIC' })}
+                  >
+                    NIC (vincular a uma multa)
+                  </button>
+                </div>
+              </div>
+            )}
+            {fineForm.tipoLancamento === 'NIC' && (() => {
+              const original = fines.find((x) => x.id === fineForm.multaOrigemId);
+              const q = normPlaca(fineForm.buscaOrigem);
+              const qTxt = fineForm.buscaOrigem.trim().toLowerCase();
+              const candidatas = multasVinculaveis(fines)
+                .filter((m) => {
+                  if (!qTxt) return true;
+                  const veh = vehicles.find((v) => v.id === m.veiculoId);
+                  return (
+                    (m.codigo || '').toLowerCase().includes(qTxt) ||
+                    m.ait.toLowerCase().includes(qTxt) ||
+                    (q && normPlaca(veh?.placa).includes(q)) ||
+                    m.motivo.toLowerCase().includes(qTxt)
+                  );
+                })
+                .slice(0, 6);
+              return (
+                <div className="space-y-2">
+                  <Field label="Multa original (busque pelo ID, AIT ou placa)">
+                    <input
+                      className="inp"
+                      placeholder="Ex.: MUL-2026-0001, AIT ou placa"
+                      disabled={!!editingFineId}
+                      value={fineForm.buscaOrigem}
+                      onChange={(e) => setFineForm({ ...fineForm, buscaOrigem: e.target.value })}
+                    />
+                  </Field>
+                  {!editingFineId && (
+                    <div className="card overflow-hidden" role="listbox" aria-label="Multas encontradas">
+                      {candidatas.length === 0 ? (
+                        <div className="p-3 ef-t13" style={{ color: 'var(--mute)' }}>
+                          Nenhuma multa encontrada.
+                        </div>
+                      ) : (
+                        candidatas.map((m) => {
+                          const veh = vehicles.find((v) => v.id === m.veiculoId);
+                          const on = m.id === fineForm.multaOrigemId;
+                          return (
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={on}
+                              key={m.id}
+                              className="w-full text-left flex items-center justify-between gap-3 px-3 ef-py2_5"
+                              style={{
+                                background: on ? 'var(--teal-wash)' : 'transparent',
+                                borderBottom: '1px solid var(--line2)',
+                              }}
+                              onClick={() =>
+                                setFineForm({
+                                  ...fineForm,
+                                  multaOrigemId: m.id,
+                                  veiculoId: m.veiculoId,
+                                  ait: m.ait,
+                                  motivo: fineForm.motivo || `NIC · ${m.motivo}`,
+                                  valor:
+                                    fineForm.valor ||
+                                    String(Math.round((m.valorOriginal ?? m.valor) * NIC_MULTIPLICADOR * 100) / 100),
+                                })
+                              }
+                            >
+                              <span className="min-w-0">
+                                <span className="mono font-bold ef-t13">{m.codigo || m.id}</span>{' '}
+                                <span className="mono ef-t12_5">{veh?.placa || 'N/A'}</span>
+                                <span className="block ef-t12 truncate" style={{ color: 'var(--mute)' }}>
+                                  {m.ait} · {m.data} · {m.motivo}
+                                </span>
+                              </span>
+                              <span className="mono ef-t12_5 font-bold shrink-0">{formatCurrency(m.valorOriginal ?? m.valor)}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                  {original && (
+                    <div className="ef-t12_5" style={{ color: 'var(--teal-ink)' }}>
+                      Vinculada à multa <b>{original.codigo || original.id}</b> · {original.ait}. O valor sugerido é a multa original × {NIC_MULTIPLICADOR}; ajuste se necessário.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <Field label="Veículo">
               <select
                 required
                 className="inp"
+                disabled={fineForm.tipoLancamento === 'NIC'}
                 value={fineForm.veiculoId}
                 onChange={(e) => setFineForm({ ...fineForm, veiculoId: e.target.value })}
               >
@@ -1979,6 +2424,7 @@ export const GlobalModals: React.FC = () => {
                 onChange={(e) => setFineForm({ ...fineForm, motivo: e.target.value })}
               />
             </Field>
+            {fineForm.tipoLancamento !== 'NIC' && (
             <div>
               <span className="lbl">Condutor da infração</span>
               <div className="seg">
@@ -1998,7 +2444,8 @@ export const GlobalModals: React.FC = () => {
                 </button>
               </div>
             </div>
-            {fineForm.identificado && (
+            )}
+            {fineForm.identificado && fineForm.tipoLancamento !== 'NIC' && (
               <Field label="Motorista">
                 <input
                   required
@@ -2021,14 +2468,20 @@ export const GlobalModals: React.FC = () => {
                 <input
                   type="number"
                   min="0"
-                  disabled={!fineForm.identificado}
+                  disabled={!fineForm.identificado || fineForm.tipoLancamento === 'NIC'}
                   className="inp mono"
-                  value={fineForm.identificado ? fineForm.pontos : 0}
+                  value={fineForm.identificado && fineForm.tipoLancamento !== 'NIC' ? fineForm.pontos : 0}
                   onChange={(e) => setFineForm({ ...fineForm, pontos: Number(e.target.value) })}
                 />
               </Field>
               <Field
-                label={fineForm.identificado ? 'Valor (R$)' : 'Valor da multa original (R$)'}
+                label={
+                  fineForm.tipoLancamento === 'NIC'
+                    ? 'Valor da NIC (R$)'
+                    : fineForm.identificado
+                    ? 'Valor (R$)'
+                    : 'Valor da multa original (R$)'
+                }
               >
                 <input
                   type="number"
@@ -2040,7 +2493,7 @@ export const GlobalModals: React.FC = () => {
                 />
               </Field>
             </div>
-            {!fineForm.identificado && (
+            {!fineForm.identificado && fineForm.tipoLancamento !== 'NIC' && (
               <div
                 className="ef-t13 px-3 ef-py2_5 rounded-lg"
                 style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}
@@ -2079,7 +2532,7 @@ export const GlobalModals: React.FC = () => {
             )}
             <FormActions
               onCancel={closeFineModal}
-              label={editingFineId ? 'Salvar alterações' : 'Salvar multa'}
+              label={editingFineId ? 'Salvar alterações' : fineForm.tipoLancamento === 'NIC' ? 'Salvar NIC' : 'Salvar multa'}
               v="danger"
             />
           </form>
