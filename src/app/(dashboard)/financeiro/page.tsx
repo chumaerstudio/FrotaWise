@@ -47,6 +47,7 @@ const TONE: Record<TipoFinanceiro, 'teal' | 'blue' | 'red' | 'amber' | 'gray'> =
   Manutenção: 'blue',
   Multa: 'red',
   Pneus: 'amber',
+  'Custo Fixo': 'blue',
   Outros: 'gray',
 };
 
@@ -55,6 +56,7 @@ const ICON: Record<TipoFinanceiro, React.ElementType> = {
   Manutenção: Wrench,
   Multa: AlertTriangle,
   Pneus: Disc,
+  'Custo Fixo': Calendar,
   Outros: DollarSign,
 };
 
@@ -87,6 +89,7 @@ export default function FinanceiroPage() {
     setPagamentos,
     contas,
     setContas,
+    custosFixos,
     showToast,
     liveMode,
   } = useEstoquePneus();
@@ -101,8 +104,8 @@ export default function FinanceiroPage() {
   const [contaForm, setContaForm] = useState(EMPTY_CONTA());
 
   const finItems = useMemo(
-    () => buildPayables({ fuelings, maintenances, fines, tires, vehicles, pagamentos, contas }),
-    [fuelings, maintenances, fines, tires, vehicles, pagamentos, contas]
+    () => buildPayables({ fuelings, maintenances, fines, tires, vehicles, pagamentos, contas, custosFixos }),
+    [fuelings, maintenances, fines, tires, vehicles, pagamentos, contas, custosFixos]
   );
 
   const upsertPlan = (
@@ -305,7 +308,7 @@ export default function FinanceiroPage() {
     const vc = lista.filter((item) => !item.pagoEm && item.vencimento < hoje);
     const pg = lista.filter((item) => !!item.pagoEm);
     return { tipo, av: soma(av), vc: soma(vc), pg: soma(pg), total: soma(lista), qtd: lista.length };
-  }).filter((row) => row.tipo !== 'Outros' || row.qtd > 0);
+  }).filter((row) => (row.tipo !== 'Outros' && row.tipo !== 'Custo Fixo') || row.qtd > 0);
   const total = resumo.reduce((acc, row) => ({
     av: acc.av + row.av,
     vc: acc.vc + row.vc,
@@ -510,7 +513,7 @@ export default function FinanceiroPage() {
           <form onSubmit={saveConta} className="space-y-3">
             <Field label="Categoria">
               <select className="inp" value={contaForm.tipo} onChange={(e) => setContaForm({ ...contaForm, tipo: e.target.value as TipoFinanceiro })}>
-                {TIPOS_FINANCEIRO.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+                {TIPOS_FINANCEIRO.filter((tipo) => tipo !== 'Custo Fixo').map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
               </select>
             </Field>
             <Field label="Veículo (opcional)">

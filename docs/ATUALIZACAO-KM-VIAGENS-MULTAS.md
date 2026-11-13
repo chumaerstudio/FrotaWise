@@ -61,3 +61,38 @@ No modo API a tela mantém o comportamento anterior (não envia campos novos): V
 2. Arla fica fora da sequência da Média de Km (igual à média km/l).
 3. Editar/cancelar movimentação de pneu: só a última; o cancelamento estorna o KM mas **não** desfaz a posição/local do pneu.
 4. Os dois anexos de imagem citados no pedido não vieram junto; a lógica foi seguida pelo texto.
+<<<<<<< HEAD
+=======
+
+---
+
+# Atualização 2 — chassi realista, Custo Fixo por Veículo e Bitruck
+
+## Chassi realista com pneus coloridos
+- A tela **Pneus e estoque → Movimentação no chassi** passou a usar a imagem do chassi em vista superior (frente à esquerda). Os pneus são desenhados por cima e usam a cor do status: **Novo, 1ª, 2ª, 3ª e Mais Recapagens** (mesma legenda e mesmas cores de antes, via `getTireRecapStyle`). Arrastar, soltar, selecionar e vagas continuam iguais; o estepe fica atrás do chassi.
+- Como a foto é de um caminhão de 2 eixos, as imagens para **2 a 6 eixos** foram geradas a partir dela (pneus pretos removidos, eixos prolongados, trechos de trilho/cardã repetidos). Ficam em `public/chassi/chassi-N-eixos.webp`; o mapa de posições dos eixos está em `src/services/chassisAssets.ts` e o desenho em `src/components/chassis/ChassisView.tsx`.
+- Com 3 ou mais eixos o chassi ocupa a largura toda e o estoque desce para baixo dele.
+
+## Bitruck (4 eixos)
+- Os **2 eixos dianteiros têm 1 pneu por lado** e os **2 traseiros são duplos** (12 posições + estepe). Antes, só o 1º eixo era simples.
+- Posições novas dos eixos simples: `E1-ESQ/E1-DIR` e `E2-ESQ/E2-DIR`.
+- **Dados antigos:** ao abrir o sistema, pneus do 2º eixo em `E2-EE/E2-DE` passam para `E2-ESQ/E2-DIR`. Pneus em `E2-EI/E2-DI` (que não existem mais) voltam ao **estoque**, com KM e histórico preservados, e um aviso é mostrado.
+- A regra vale para qualquer veículo com 4 eixos. Demais quantidades de eixos não mudaram.
+
+## Custo Fixo por Veículo
+- Nova aba em **Manutenções e multas**, ao lado de Manutenções e Multas, com botão **Custo fixo**.
+- Campos: veículo, categoria (Seguro, IPVA/Licenciamento, Rastreamento, Financiamento/Consórcio, Salário/Encargos, Outros), descrição, valor mensal, dia do vencimento, mês de início, mês final (opcional) e ativo.
+- **Sincronização com o Financeiro (`buildPayables`):** cada mês vira um pagamento do tipo **Custo Fixo**, com vencimento no dia escolhido (dia 31 cai no último dia dos meses curtos). Aparecem do mês de início até o mês seguinte ao atual (ou até o mês final) e passam a surgir mês a mês sozinhos. A baixa de cada mês é feita no Financeiro; a aba mostra a situação do mês atual (Pago, A vencer, Vencido).
+- Editar valor, dia ou vigência atualiza todos os meses no Financeiro. Custo inativo deixa de gerar meses futuros e mantém o histórico. Excluir remove o custo e todos os seus meses (inclusive pagos); a tela avisa e sugere informar o mês final para manter o histórico.
+- Os dados ficam no armazenamento local (modo DEMO) e entram no backup. No modo API a aba mostra aviso de indisponibilidade.
+
+## Arquivos (atualização 2)
+Novos: `components/chassis/ChassisView.tsx`, `components/custos/CustoFixoModal.tsx`, `services/chassisAssets.ts`, `services/custosFixosService.ts`, `public/chassi/*.webp`.
+Modificados: `pneus/page.tsx`, `custos-multas/page.tsx`, `financeiro/page.tsx`, `malha-pneus/page.tsx`, `ui/index.tsx` (`TireChip` variante chassi), `globals.css`, `useFrotaWiseStore.tsx`, `veiculosService.ts`, `financeiroLocal.ts`, `config/constants.ts`, `types/frotawise.d.ts`, testes em `tests/domain/quilometragem-integracao.test.ts`.
+
+## Backend (modo API)
+Tabela `custos_fixos` (veiculo_id, categoria, descricao, valor_mensal, dia_vencimento, inicio, fim, ativo) e geração das competências no financeiro com origem `custoFixo` (id da competência `custoId:AAAA-MM`). Layout do Bitruck: aplicar a mesma regra de posições (`E1/E2-ESQ|DIR`) no cadastro de posições.
+
+## Observação sobre os testes
+O teste `FE-07` de `tests/domain/snapshot-3.5.0-suite.test.ts` já falhava antes desta atualização (espera um formato antigo de `getVehicleChassisSlots`); não foi alterado.
+>>>>>>> 94e87f8 (Novas atualizações)

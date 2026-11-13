@@ -26,3 +26,8 @@ O Snapshot Frontend 3.5.0 introduziu dois novos domínios que exigem adendo no B
 ## Adendo — KM, viagens, NIC (ver `docs/ATUALIZACAO-KM-VIAGENS-MULTAS.md`)
 
 Campos/tabelas que o backend precisa suportar para liberar no modo API: `pneus_historico` (`tipo`, `km_inicial`, `km_final`, `km_veiculo`, `cancelada`), `abastecimentos.viagem_id` (opcional), tabelas de viagens/itens/despesas (despesa de abastecimento com `abastecimento_id` único) e `multas` (`codigo` único gerado no servidor, `tipo_lancamento`, `multa_origem_id`). Regra de KM do pneu: `kmRodados = km_final - km_inicial`, com `km_inicial` = último KM do pneu; o hodômetro do veículo não é somado aos pneus.
+<<<<<<< HEAD
+=======
+
+Adendo 2: `custos_fixos` (veiculo_id, categoria, descricao, valor_mensal, dia_vencimento, inicio, fim, ativo) com competências mensais no financeiro (origem `custoFixo`, id `custoId:AAAA-MM`); posições do Bitruck (4 eixos): `E1-ESQ/DIR` e `E2-ESQ/DIR` (simples), `E3/E4-EE/EI/DI/DE` (duplos).
+>>>>>>> 94e87f8 (Novas atualizações)

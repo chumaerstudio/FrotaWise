@@ -10,6 +10,10 @@ import { RegraManutencaoPreventiva, RegraModeloPneu } from '@/types/frotawise';
 import { httpClient } from '@/lib/http/client';
 import { normalizarViagens } from '@/services/viagensService';
 import { normalizarMultas } from '@/services/multasService';
+<<<<<<< HEAD
+=======
+import { normalizarCustosFixos } from '@/services/custosFixosService';
+>>>>>>> 94e87f8 (Novas atualizações)
 
 export default function MalhaPneusConfigPage() {
   const {
@@ -24,6 +28,10 @@ export default function MalhaPneusConfigPage() {
     setFines,
     setFuelings,
     setTrips,
+<<<<<<< HEAD
+=======
+    setCustosFixos,
+>>>>>>> 94e87f8 (Novas atualizações)
     preventiveList,
     showToast,
     handleExportBackup,
@@ -57,6 +65,10 @@ export default function MalhaPneusConfigPage() {
         if (Array.isArray(p.fines)) setFines(normalizarMultas(p.fines));
         if (Array.isArray(p.fuelings)) setFuelings(p.fuelings);
         if (Array.isArray(p.trips)) setTrips(normalizarViagens(p.trips));
+<<<<<<< HEAD
+=======
+        if (Array.isArray(p.custosFixos)) setCustosFixos(normalizarCustosFixos(p.custosFixos));
+>>>>>>> 94e87f8 (Novas atualizações)
         showToast('Backup restaurado com sucesso!');
       } catch {
         showToast('Arquivo inválido. Selecione um backup .json do FrotaWise.', 'error');

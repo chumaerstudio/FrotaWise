@@ -152,6 +152,8 @@ export interface ChassisAxleLayout {
   axleNumber: number;
   leftSlots: ChassisSlot[];
   rightSlots: ChassisSlot[];
+  /** true = um pneu por lado (eixo simples); false = rodado duplo. */
+  single: boolean;
 }
 
 export interface VehicleChassisLayout {
@@ -159,20 +161,32 @@ export interface VehicleChassisLayout {
   axles: ChassisAxleLayout[];
 }
 
+/**
+ * Quantos eixos dianteiros têm um pneu por lado (eixo simples).
+ * Bitruck (4 eixos): os DOIS eixos dianteiros são simples e os dois traseiros são duplos.
+ * Demais configurações: só o 1º eixo é simples.
+ */
+export const singleAxleCount = (eixos: number): number => (Math.trunc(Number(eixos)) === 4 ? 2 : 1);
+
 /** Retorna o mapa visual do chassi usado pela tela de pneus. */
 export function getVehicleChassisSlots(eixos: number): VehicleChassisLayout {
   const n = Math.max(2, Math.min(6, Math.trunc(Number(eixos) || 3)));
-  const axles: ChassisAxleLayout[] = [
-    {
-      axleNumber: 1,
-      leftSlots: [{ code: 'E1-ESQ', label: '1º Eixo Esq.' }],
-      rightSlots: [{ code: 'E1-DIR', label: '1º Eixo Dir.' }],
-    },
-  ];
+  const singles = singleAxleCount(n);
+  const axles: ChassisAxleLayout[] = [];
 
-  for (let i = 2; i <= n; i++) {
+  for (let i = 1; i <= n; i++) {
+    if (i <= singles) {
+      axles.push({
+        axleNumber: i,
+        single: true,
+        leftSlots: [{ code: `E${i}-ESQ`, label: `${i}º Eixo Esq.` }],
+        rightSlots: [{ code: `E${i}-DIR`, label: `${i}º Eixo Dir.` }],
+      });
+      continue;
+    }
     axles.push({
       axleNumber: i,
+      single: false,
       leftSlots: [
         { code: `E${i}-EE`, label: `${i}º Eixo Ext. Esq.` },
         { code: `E${i}-EI`, label: `${i}º Eixo Int. Esq.` },
@@ -195,6 +209,43 @@ function getValidSlotCodes(layout: VehicleChassisLayout): Set<string> {
       ...axle.rightSlots.map((slot) => slot.code),
     ]),
   ]);
+}
+
+/**
+ * Corrige dados antigos: antes o 2º eixo do Bitruck (4 eixos) era desenhado como duplo.
+ * Pneus em E2-EE / E2-DE passam para E2-ESQ / E2-DIR; os internos (E2-EI / E2-DI) não têm
+ * mais posição e voltam ao estoque (sem alterar o KM). Nada é apagado.
+ */
+export function migrarPosicoesLegadasBitruck(
+  vehicles: Veiculo[],
+  tires: Pneu[]
+): { tires: Pneu[]; remapeados: Pneu[]; estocados: Pneu[] } {
+  const bitrucks = new Set(vehicles.filter((v) => singleAxleCount(v.eixos) === 2).map((v) => v.id));
+  const remap: Record<string, string> = { 'E2-EE': 'E2-ESQ', 'E2-DE': 'E2-DIR' };
+  const orfaos = new Set(['E2-EI', 'E2-DI']);
+  const remapeados: Pneu[] = [];
+  const estocados: Pneu[] = [];
+  const out = tires.map((t) => {
+    if (!bitrucks.has(t.veiculoAtualId)) return t;
+    if (remap[t.posicaoAtual]) {
+      const n = { ...t, posicaoAtual: remap[t.posicaoAtual] };
+      remapeados.push(n);
+      return n;
+    }
+    if (orfaos.has(t.posicaoAtual)) {
+      const n: Pneu = {
+        ...t,
+        classificacao: 'Estocar',
+        veiculoAtualId: '',
+        posicaoAtual: '',
+        localEstoque: 'Almoxarifado Geral',
+      };
+      estocados.push(n);
+      return n;
+    }
+    return t;
+  });
+  return { tires: remapeados.length || estocados.length ? out : tires, remapeados, estocados };
 }
 
 export function findOrphanedTiresOnAxleChange(

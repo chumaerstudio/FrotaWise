@@ -1,6 +1,12 @@
+import {
+  competenciasDoCusto,
+  idCompetencia,
+  vencimentoDaCompetencia,
+} from '@/services/custosFixosService';
 import type {
   Abastecimento,
   ContaPagar,
+  CustoFixo,
   Manutencao,
   Multa,
   PagamentoPlano,
@@ -14,6 +20,7 @@ export const TIPOS_FINANCEIRO: TipoFinanceiro[] = [
   'Manutenção',
   'Multa',
   'Pneus',
+  'Custo Fixo',
   'Outros',
 ];
 
@@ -83,8 +90,13 @@ export function buildPayables(args: {
   vehicles: Veiculo[];
   pagamentos: PagamentoPlano[];
   contas: ContaPagar[];
+  /** Custos fixos mensais por veículo: cada competência vira um pagamento. */
+  custosFixos?: CustoFixo[];
+  hoje?: string;
 }): ItemFinanceiro[] {
   const { fuelings, maintenances, fines, tires, vehicles, pagamentos, contas } = args;
+  const custosFixos = args.custosFixos ?? [];
+  const hojeIso = args.hoje ?? localToday();
   const placa = (id: string) => vehicles.find((v) => v.id === id)?.placa || '';
   const base: Array<{
     origem: PagamentoPlano['origem'];
@@ -132,6 +144,22 @@ export function buildPayables(args: {
     sub: [placa(c.veiculoId), c.fornecedor].filter(Boolean).join(' · '),
     total: Number(c.valor) || 0, data: c.data,
   }));
+
+  // Custo fixo: uma conta por competência (mês), com vencimento no dia combinado.
+  custosFixos.forEach((c) => {
+    competenciasDoCusto(c, hojeIso).forEach((ym) => {
+      const [yy, mm] = ym.split('-');
+      base.push({
+        origem: 'custoFixo',
+        origemId: idCompetencia(c.id, ym),
+        tipo: 'Custo Fixo',
+        descricao: `${c.descricao} · ${mm}/${yy}`,
+        sub: [placa(c.veiculoId), c.categoria].filter(Boolean).join(' · '),
+        total: Number(c.valorMensal) || 0,
+        data: vencimentoDaCompetencia(ym, c.diaVencimento),
+      });
+    });
+  });
 
   const out: ItemFinanceiro[] = [];
   base.filter((item) => item.total > 0).forEach((item) => {

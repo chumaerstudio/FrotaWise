@@ -252,3 +252,93 @@ describe('Cores de status', () => {
     expect(getClassificacaoTone('Sucatear')).toBe('red');
   });
 });
+<<<<<<< HEAD
+=======
+
+// ===== Chassi (Bitruck), Custo Fixo e Financeiro =====
+import { getVehicleChassisSlots, migrarPosicoesLegadasBitruck, singleAxleCount } from '@/services/veiculosService';
+import { competenciasDoCusto, totalMensalVigente, vencimentoDaCompetencia, validarCustoFixo } from '@/services/custosFixosService';
+import { buildPayables } from '@/services/financeiroLocal';
+import { getChassisAsset } from '@/services/chassisAssets';
+import type { CustoFixo } from '@/types/frotawise';
+
+describe('Chassi do Bitruck (4 eixos)', () => {
+  it('2 eixos dianteiros simples e 2 traseiros duplos', () => {
+    const l = getVehicleChassisSlots(4);
+    expect(l.axles.map((a) => a.single)).toEqual([true, true, false, false]);
+    expect(l.axles[1].leftSlots).toHaveLength(1);
+    expect(l.axles[1].rightSlots).toHaveLength(1);
+    expect(l.axles[2].leftSlots).toHaveLength(2);
+    expect(l.axles[3].rightSlots).toHaveLength(2);
+    const total = l.axles.reduce((a, x) => a + x.leftSlots.length + x.rightSlots.length, 0);
+    expect(total).toBe(12);
+  });
+  it('as demais configurações continuam: só o 1º eixo é simples', () => {
+    expect(getVehicleChassisSlots(2).axles.map((a) => a.single)).toEqual([true, false]);
+    expect(getVehicleChassisSlots(3).axles.map((a) => a.single)).toEqual([true, false, false]);
+    expect(singleAxleCount(3)).toBe(1);
+    expect(singleAxleCount(4)).toBe(2);
+  });
+  it('cada configuração tem imagem com um centro por eixo', () => {
+    for (const n of [2, 3, 4, 5, 6]) expect(getChassisAsset(n).axles).toHaveLength(n);
+  });
+  it('migra dados antigos: externos reposicionam, internos do 2º eixo vão ao estoque', () => {
+    const veh = [{ id: 'b', eixos: 4 }, { id: 'o', eixos: 3 }] as unknown as Veiculo[];
+    const t = (id: string, v: string, pos: string) => pneu({ id, veiculoAtualId: v, posicaoAtual: pos });
+    const r = migrarPosicoesLegadasBitruck(veh, [t('1', 'b', 'E2-EE'), t('2', 'b', 'E2-DE'), t('3', 'b', 'E2-EI'), t('4', 'b', 'E3-EE'), t('5', 'o', 'E2-EE')]);
+    expect(r.tires.map((x) => x.posicaoAtual)).toEqual(['E2-ESQ', 'E2-DIR', '', 'E3-EE', 'E2-EE']);
+    expect(r.tires[2].classificacao).toBe('Estocar');
+    expect(r.tires[2].kmTotal).toBe(10000);
+  });
+  it('sem nada a migrar, devolve a mesma lista (sem reescrever)', () => {
+    const veh = [{ id: 'b', eixos: 4 }] as unknown as Veiculo[];
+    const tires = [pneu({ veiculoAtualId: 'b', posicaoAtual: 'E3-EE' })];
+    expect(migrarPosicoesLegadasBitruck(veh, tires).tires === tires).toBe(true);
+  });
+});
+
+describe('Custo fixo por veículo ↔ Financeiro', () => {
+  const custo = (over: Partial<CustoFixo> = {}): CustoFixo => ({
+    id: 'c1', veiculoId: 'v1', categoria: 'Seguro', descricao: 'Seguro', valorMensal: 1000,
+    diaVencimento: 31, inicio: '2026-09', fim: null, ativo: true, ...over,
+  });
+  it('gera uma competência por mês até o mês seguinte ao atual', () => {
+    expect(competenciasDoCusto(custo(), '2026-11-12')).toEqual(['2026-09', '2026-10', '2026-11', '2026-12']);
+  });
+  it('respeita o mês final e custo inativo não gera meses futuros', () => {
+    expect(competenciasDoCusto(custo({ fim: '2026-10' }), '2026-11-12')).toEqual(['2026-09', '2026-10']);
+    expect(competenciasDoCusto(custo({ ativo: false }), '2026-11-12')).toEqual(['2026-09', '2026-10', '2026-11']);
+  });
+  it('vencimento no dia 31 cai no último dia de meses curtos', () => {
+    expect(vencimentoDaCompetencia('2026-11', 31)).toBe('2026-11-30');
+    expect(vencimentoDaCompetencia('2028-02', 31)).toBe('2028-02-29');
+  });
+  it('cada competência vira um pagamento do tipo Custo Fixo, com baixa independente', () => {
+    const base = { fuelings: [], maintenances: [], fines: [], tires: [], vehicles: [{ id: 'v1', placa: 'AAA-0001' }] as any, contas: [] };
+    const sem = buildPayables({ ...base, pagamentos: [], custosFixos: [custo()], hoje: '2026-11-12' });
+    expect(sem).toHaveLength(4);
+    expect(sem.every((i) => i.tipo === 'Custo Fixo' && i.valor === 1000)).toBe(true);
+    expect(sem[1].vencimento).toBe('2026-10-31');
+    const pago = buildPayables({
+      ...base, custosFixos: [custo()], hoje: '2026-11-12',
+      pagamentos: [{ id: 'p', origem: 'custoFixo', origemId: 'c1:2026-10', forma: 'avista', parcelas: 1, vencimento: '2026-10-31', pagas: { 0: '2026-10-30' } }],
+    });
+    expect(pago.filter((i) => i.pagoEm).map((i) => i.origemId)).toEqual(['c1:2026-10']);
+  });
+  it('alterar o valor reflete em todos os meses; sem custos nada muda', () => {
+    const base = { fuelings: [], maintenances: [], fines: [], tires: [], vehicles: [], pagamentos: [], contas: [] };
+    const r = buildPayables({ ...base, custosFixos: [custo({ valorMensal: 1234.5 })], hoje: '2026-11-12' });
+    expect(r.every((i) => i.valor === 1234.5)).toBe(true);
+    expect(buildPayables({ ...base, hoje: '2026-11-12' })).toHaveLength(0);
+  });
+  it('total mensal vigente por veículo e validações', () => {
+    const cs = [custo(), custo({ id: 'c2', veiculoId: 'v2', valorMensal: 500 }), custo({ id: 'c3', fim: '2026-10', valorMensal: 99 })];
+    expect(totalMensalVigente(cs, '2026-11')).toBe(1500);
+    expect(totalMensalVigente(cs, '2026-11', 'v2')).toBe(500);
+    expect(validarCustoFixo({ veiculoId: '', descricao: 'x', valorMensal: 1, diaVencimento: 5, inicio: '2026-01', fim: null })).toMatch(/veículo/i);
+    expect(validarCustoFixo({ veiculoId: 'v', descricao: 'x', valorMensal: 0, diaVencimento: 5, inicio: '2026-01', fim: null })).toMatch(/valor/i);
+    expect(validarCustoFixo({ veiculoId: 'v', descricao: 'x', valorMensal: 1, diaVencimento: 5, inicio: '2026-05', fim: '2026-01' })).toMatch(/final/i);
+    expect(validarCustoFixo({ veiculoId: 'v', descricao: 'x', valorMensal: 1, diaVencimento: 5, inicio: '2026-01', fim: null })).toBe('');
+  });
+});
+>>>>>>> 94e87f8 (Novas atualizações)

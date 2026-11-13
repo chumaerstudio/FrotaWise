@@ -179,8 +179,45 @@ export interface Multa {
   integrarFinanceiro?: boolean;
 }
 
-export type TipoFinanceiro = 'Abastecimento' | 'Manutenção' | 'Multa' | 'Pneus' | 'Outros';
-export type OrigemPagamento = 'abastecimento' | 'manutencao' | 'multa' | 'pneu' | 'conta';
+export type TipoFinanceiro =
+  | 'Abastecimento'
+  | 'Manutenção'
+  | 'Multa'
+  | 'Pneus'
+  | 'Custo Fixo'
+  | 'Outros';
+export type OrigemPagamento =
+  | 'abastecimento'
+  | 'manutencao'
+  | 'multa'
+  | 'pneu'
+  | 'conta'
+  | 'custoFixo';
+
+export type CategoriaCustoFixo =
+  | 'Seguro'
+  | 'IPVA / Licenciamento'
+  | 'Rastreamento'
+  | 'Financiamento / Consórcio'
+  | 'Salário / Encargos'
+  | 'Outros';
+
+/** Custo que o veículo tem todo mês. Cada competência vira um pagamento no Financeiro. */
+export interface CustoFixo {
+  id: string;
+  veiculoId: string;
+  categoria: CategoriaCustoFixo;
+  descricao: string;
+  valorMensal: number;
+  /** Dia do vencimento no mês (1–31; meses curtos usam o último dia). */
+  diaVencimento: number;
+  /** Primeira competência (AAAA-MM). */
+  inicio: string;
+  /** Última competência (AAAA-MM). Vazio = sem data para terminar. */
+  fim: string | null;
+  ativo: boolean;
+  obs?: string;
+}
 
 export interface PagamentoPlano {
   id: string;

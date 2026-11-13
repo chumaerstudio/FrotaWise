@@ -16,6 +16,7 @@ import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
 import { getClassificacaoTone } from '@/services/statusTones';
 import { getVehicleChassisSlots } from '@/services/veiculosService';
 import { Btn, Chip, Empty, Field, SectionHead, TireChip, cx } from '@/components/ui';
+import { ChassisView } from '@/components/chassis/ChassisView';
 import { TipoOperacaoPneu } from '@/types/frotawise';
 
 export default function PneusHubPage() {
@@ -68,6 +69,7 @@ export default function PneusHubPage() {
       return (
         <TireChip
           key={slot.code}
+          variant="chassis"
           t={mt}
           selected={selectedTireForActionId === mt.id}
           onSelect={(id) => setSelectedTireForActionId((p) => (p === id ? null : id))}
@@ -277,46 +279,9 @@ export default function PneusHubPage() {
               )}
             </div>
 
-            <div className="p-5 ef-g-chassis">
-              <div className="overflow-x-auto flex justify-center py-4">
-                <div className="flex items-center" style={{ minWidth: 540 }}>
-                  <div className="w-3 h-28 rounded-sm" style={{ background: 'var(--axle)' }} />
-                  <div className="w-5 h-2" style={{ background: 'var(--rail)' }} />
-                  <div className="z-10">{renderSlot(layout.spareSlot)}</div>
-                  <div className="w-7 ef-h2_5" style={{ background: 'var(--rail)' }} />
-                  <div className="relative flex items-center gap-8">
-                    <div
-                      className="absolute left-0 right-0 top-1/2 -translate-y-1/2 ef-h2_5 rounded-full"
-                      style={{ background: 'var(--rail)' }}
-                    />
-                    {[...layout.axles].reverse().map((ax) => (
-                      <div key={ax.axleNumber} className="relative z-10 flex flex-col items-center">
-                        <div className="flex flex-col ef-gap1_5 mb-3">
-                          {ax.leftSlots.map(renderSlot)}
-                        </div>
-                        <div
-                          className="ef-w1_5 h-10 rounded-full"
-                          style={{ background: 'var(--axle)' }}
-                        />
-                        <div className="flex flex-col ef-gap1_5 mt-3">
-                          {ax.rightSlots.map(renderSlot)}
-                        </div>
-                        <span
-                          className="mt-2 ef-t11 font-semibold"
-                          style={{ color: 'var(--mute)' }}
-                        >
-                          {ax.axleNumber}º eixo
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="w-7 ef-h2_5" style={{ background: 'var(--rail)' }} />
-                  <div
-                    className="w-10 h-28 rounded-r-2xl"
-                    style={{ background: 'var(--axle)' }}
-                    title="Cabine"
-                  />
-                </div>
+            <div className={cx('p-5 ef-g-chassis', layout.axles.length >= 3 && 'ef-g-chassis-wide')}>
+              <div className="py-2">
+                <ChassisView layout={layout} eixos={activeVehicle.eixos} renderSlot={renderSlot} />
               </div>
 
               <div className="ef-chassis-side">
@@ -449,7 +414,7 @@ export default function PneusHubPage() {
                             className="font-semibold ef-hu"
                             style={{ color: 'var(--teal)' }}
                           >
-                            {(t.historicoVeiculos || []).length} veículos
+                            Movimentações
                           </button>
                         </td>
                         <td className="text-right whitespace-nowrap ef-sx15">
@@ -562,7 +527,7 @@ export default function PneusHubPage() {
                       </td>
                       <td className="text-center">
                         <Btn sm icon={History} onClick={() => setHistoryModalTire(t)}>
-                          {(t.historicoVeiculos || []).length} veículos
+                          Movimentações
                         </Btn>
                       </td>
                       <td className="text-right whitespace-nowrap ef-sx15">

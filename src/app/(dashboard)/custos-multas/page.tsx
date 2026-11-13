@@ -1,13 +1,24 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+<<<<<<< HEAD
 import { Wrench, FileWarning, Plus } from 'lucide-react';
+=======
+import { Wrench, FileWarning, Plus, Calendar } from 'lucide-react';
+>>>>>>> 94e87f8 (Novas atualizações)
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatCurrency, formatNumber } from '@/services/api';
 import { Btn, Chip, Empty, Modal, Plate, PlateFilter } from '@/components/ui';
 import { getMultaStatusTone } from '@/services/statusTones';
 import { ehNic, multaOriginalDaNic, nicsDaMulta, normPlaca } from '@/services/multasService';
+<<<<<<< HEAD
 import type { Multa } from '@/types/frotawise';
+=======
+import { CustoFixoModal } from '@/components/custos/CustoFixoModal';
+import { idCompetencia, situacaoDoCusto, totalMensalVigente, vencimentoDaCompetencia, vigenteNoMes } from '@/services/custosFixosService';
+import { localToday } from '@/services/financeiroLocal';
+import type { CustoFixo, Multa } from '@/types/frotawise';
+>>>>>>> 94e87f8 (Novas atualizações)
 
 export default function CustosMultasPage() {
   const {
@@ -22,10 +33,26 @@ export default function CustosMultasPage() {
     setShowFineModal,
     startEditFine,
     handleDeleteFine,
+<<<<<<< HEAD
     liveMode,
   } = useEstoquePneus();
 
   const [expenseSubTab, setExpenseSubTab] = useState<'maintenances' | 'fines'>('maintenances');
+=======
+    custosFixos,
+    setCustosFixos,
+    pagamentos,
+    setPagamentos,
+    showToast,
+    liveMode,
+  } = useEstoquePneus();
+
+  const [expenseSubTab, setExpenseSubTab] = useState<'maintenances' | 'fines' | 'fixed'>('maintenances');
+  const [fixedPlate, setFixedPlate] = useState('');
+  const [fixedModal, setFixedModal] = useState<{ custo: CustoFixo | null } | null>(null);
+  const hoje = localToday();
+  const mesAtual = hoje.slice(0, 7);
+>>>>>>> 94e87f8 (Novas atualizações)
   // Filtros por placa (um por aba), independentes entre si.
   const [maintPlate, setMaintPlate] = useState('');
   const [finePlate, setFinePlate] = useState('');
@@ -51,6 +78,55 @@ export default function CustosMultasPage() {
   const sum = (arr: { valor: number }[]) => arr.reduce((a, x) => a + (Number(x.valor) || 0), 0);
 
   const detailFine = fines.find((f) => f.id === detailFineId) || null;
+<<<<<<< HEAD
+=======
+
+  const visibleFixed = useMemo(
+    () =>
+      custosFixos
+        .filter((c) => matchPlate(c.veiculoId, fixedPlate))
+        .sort((a, b) => (plateOf(a.veiculoId) || '').localeCompare(plateOf(b.veiculoId) || '') || a.descricao.localeCompare(b.descricao)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [custosFixos, fixedPlate, vehicles]
+  );
+  const totalFixoMes = totalMensalVigente(custosFixos, mesAtual);
+  const porVeiculo = useMemo(
+    () =>
+      vehicles
+        .map((v) => ({ v, total: totalMensalVigente(custosFixos, mesAtual, v.id) }))
+        .filter((x) => x.total > 0),
+    [vehicles, custosFixos, mesAtual]
+  );
+  // Situação do mês atual no Financeiro (a baixa é feita lá).
+  const statusFinanceiro = (c: CustoFixo) => {
+    if (!vigenteNoMes(c, mesAtual)) return null;
+    const plan = pagamentos.find((p) => p.origem === 'custoFixo' && p.origemId === idCompetencia(c.id, mesAtual));
+    const venc = vencimentoDaCompetencia(mesAtual, c.diaVencimento);
+    if (plan?.pagas?.[0]) return { label: 'Pago', tone: 'teal' as const, venc };
+    return venc < hoje ? { label: 'Vencido', tone: 'red' as const, venc } : { label: 'A vencer', tone: 'blue' as const, venc };
+  };
+  const saveFixed = (c: CustoFixo) => {
+    const exists = custosFixos.some((x) => x.id === c.id);
+    setCustosFixos((p) => (exists ? p.map((x) => (x.id === c.id ? c : x)) : [c, ...p]));
+    setFixedModal(null);
+    showToast(
+      exists
+        ? 'Custo fixo atualizado. O Financeiro já reflete a alteração.'
+        : `Custo fixo lançado: ${formatCurrency(c.valorMensal)}/mês no Financeiro.`
+    );
+  };
+  const deleteFixed = (c: CustoFixo) => {
+    if (
+      !window.confirm(
+        `Excluir o custo fixo "${c.descricao}" (${plateOf(c.veiculoId) || 'N/A'})?\n\nTodos os meses dele saem do Financeiro, inclusive os já pagos. Para manter o histórico, use Editar e informe o mês final ou desative o custo.`
+      )
+    )
+      return;
+    setCustosFixos((p) => p.filter((x) => x.id !== c.id));
+    setPagamentos((p) => p.filter((x) => !(x.origem === 'custoFixo' && x.origemId.startsWith(`${c.id}:`))));
+    showToast('Custo fixo excluído.');
+  };
+>>>>>>> 94e87f8 (Novas atualizações)
 
   return (
     <div className="space-y-5">
@@ -72,6 +148,14 @@ export default function CustosMultasPage() {
             <FileWarning size={15} />
             Multas ({fines.length}) · {formatCurrency(totalFinesCost)}
           </button>
+          <button
+            role="tab"
+            className={expenseSubTab === 'fixed' ? 'on' : ''}
+            onClick={() => setExpenseSubTab('fixed')}
+          >
+            <Calendar size={15} />
+            Custo Fixo por Veículo ({custosFixos.length}) · {formatCurrency(totalFixoMes)}/mês
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <Btn v="dark" icon={Plus} onClick={() => setShowMaintenanceModal(true)}>
@@ -80,10 +164,16 @@ export default function CustosMultasPage() {
           <Btn v="danger" icon={Plus} onClick={() => setShowFineModal(true)}>
             Lançar multa / NIC
           </Btn>
+          {!liveMode && (
+            <Btn v="primary" icon={Plus} onClick={() => setFixedModal({ custo: null })}>
+              Custo fixo
+            </Btn>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+<<<<<<< HEAD
         {expenseSubTab === 'maintenances' ? (
           <PlateFilter id="plate-maint" value={maintPlate} onChange={setMaintPlate} plates={plates} />
         ) : (
@@ -108,6 +198,119 @@ export default function CustosMultasPage() {
 
       <div className="card overflow-hidden ef-rise" key={expenseSubTab}>
         {expenseSubTab === 'maintenances' ? (
+=======
+        {expenseSubTab === 'maintenances' ? (
+          <PlateFilter id="plate-maint" value={maintPlate} onChange={setMaintPlate} plates={plates} />
+        ) : expenseSubTab === 'fines' ? (
+          <PlateFilter id="plate-fines" value={finePlate} onChange={setFinePlate} plates={plates} />
+        ) : (
+          <PlateFilter id="plate-fixed" value={fixedPlate} onChange={setFixedPlate} plates={plates} />
+        )}
+        {expenseSubTab !== 'fixed' && (expenseSubTab === 'maintenances' ? maintPlate : finePlate).trim() && (
+          <>
+            <span className="ef-t13" style={{ color: 'var(--mute)' }}>
+              {expenseSubTab === 'maintenances'
+                ? `${visibleMaint.length} de ${maintenances.length} manutenções · ${formatCurrency(sum(visibleMaint))}`
+                : `${visibleFines.length} de ${fines.length} multas · ${formatCurrency(sum(visibleFines))}`}
+            </span>
+            <Btn
+              sm
+              onClick={() => (expenseSubTab === 'maintenances' ? setMaintPlate('') : setFinePlate(''))}
+            >
+              Limpar filtro
+            </Btn>
+          </>
+        )}
+      </div>
+
+      <div className="card overflow-hidden ef-rise" key={expenseSubTab}>
+        {expenseSubTab === 'fixed' ? (
+          liveMode ? (
+            <Empty
+              icon={Calendar}
+              title="Custo fixo indisponível no modo API"
+              text="O backend atual ainda não possui custos fixos. No modo DEMO/offline a aba funciona e sincroniza com o Financeiro."
+            />
+          ) : (
+            <>
+              <div className="px-5 py-4 flex flex-wrap items-center gap-2" style={{ borderBottom: '1px solid var(--line2)' }}>
+                <span className="ef-t13 font-semibold mr-1">Fixo mensal por veículo:</span>
+                {porVeiculo.length === 0 ? (
+                  <span className="ef-t13" style={{ color: 'var(--mute)' }}>nenhum custo vigente neste mês</span>
+                ) : (
+                  porVeiculo.map(({ v, total }) => (
+                    <Chip key={v.id} tone="blue">
+                      <span className="mono">{v.placa}</span> · {formatCurrency(total)}/mês
+                    </Chip>
+                  ))
+                )}
+                <span className="ef-t12_5 ml-auto" style={{ color: 'var(--mute)' }}>
+                  Total do mês: <b className="mono">{formatCurrency(totalFixoMes)}</b> · lançado automaticamente no Financeiro
+                </span>
+              </div>
+              {visibleFixed.length === 0 ? (
+                <Empty
+                  icon={Calendar}
+                  title={custosFixos.length === 0 ? 'Nenhum custo fixo lançado' : 'Nenhum custo fixo para esta placa'}
+                  text={
+                    custosFixos.length === 0
+                      ? 'Lance seguro, IPVA, rastreador, financiamento… Cada mês entra sozinho no Financeiro.'
+                      : 'Ajuste ou limpe o filtro de placa.'
+                  }
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>Veículo</th>
+                        <th>Custo</th>
+                        <th className="ef-tr">Valor mensal</th>
+                        <th className="ef-tc">Vencimento</th>
+                        <th>Vigência</th>
+                        <th className="ef-tc">Situação</th>
+                        <th className="ef-tc">Mês atual (Financeiro)</th>
+                        <th className="ef-tr">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleFixed.map((c) => {
+                        const veh = vehicles.find((v) => v.id === c.veiculoId);
+                        const sit = situacaoDoCusto(c, mesAtual);
+                        const fin = statusFinanceiro(c);
+                        return (
+                          <tr key={c.id}>
+                            <td>{veh ? <Plate v={veh} /> : 'N/A'}</td>
+                            <td>
+                              <div className="font-semibold">{c.descricao}</div>
+                              <div className="ef-t12" style={{ color: 'var(--mute)' }}>{c.categoria}{c.obs ? ` · ${c.obs}` : ''}</div>
+                            </td>
+                            <td className="mono text-right font-bold whitespace-nowrap">{formatCurrency(c.valorMensal)}</td>
+                            <td className="mono text-center">dia {c.diaVencimento}</td>
+                            <td className="mono whitespace-nowrap ef-t13">
+                              {c.inicio.split('-').reverse().join('/')} → {c.fim ? c.fim.split('-').reverse().join('/') : 'sem fim'}
+                            </td>
+                            <td className="text-center">
+                              <Chip tone={sit === 'Ativo' ? 'teal' : sit === 'Futuro' ? 'blue' : 'gray'}>{sit}</Chip>
+                            </td>
+                            <td className="text-center">
+                              {fin ? <Chip tone={fin.tone}>{fin.label} · {fin.venc.split('-').reverse().slice(0, 2).join('/')}</Chip> : <span style={{ color: 'var(--mute)' }}>—</span>}
+                            </td>
+                            <td className="text-right whitespace-nowrap ef-sx15">
+                              <Btn sm onClick={() => setFixedModal({ custo: c })}>Editar</Btn>
+                              <Btn sm className="ef-del" onClick={() => deleteFixed(c)}>Excluir</Btn>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )
+        ) : expenseSubTab === 'maintenances' ? (
+>>>>>>> 94e87f8 (Novas atualizações)
           visibleMaint.length === 0 ? (
             <Empty
               icon={Wrench}
@@ -291,6 +494,20 @@ export default function CustosMultasPage() {
         )}
       </div>
 
+<<<<<<< HEAD
+=======
+      {fixedModal && (
+        <CustoFixoModal
+          vehicles={vehicles}
+          custo={fixedModal.custo}
+          defaultVeiculoId={fixedPlate ? vehicles.find((v) => normPlaca(v.placa) === normPlaca(fixedPlate))?.id : undefined}
+          onSave={saveFixed}
+          onClose={() => setFixedModal(null)}
+          onError={(m) => showToast(m, 'error')}
+        />
+      )}
+
+>>>>>>> 94e87f8 (Novas atualizações)
       {detailFine && (
         <FineDetailModal
           fine={detailFine}

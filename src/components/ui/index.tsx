@@ -251,13 +251,16 @@ export const TireChip: React.FC<{
   onSelect: (id: string) => void;
   onDragStartTire: (id: string) => void;
   onDragEndTire: () => void;
-}> = ({ t, selected, onSelect, onDragStartTire, onDragEndTire }) => {
+  /** 'chassis' = pneu desenhado sobre a imagem do chassi (cor do status + banda). */
+  variant?: 'chip' | 'chassis';
+}> = ({ t, selected, onSelect, onDragStartTire, onDragEndTire, variant = 'chip' }) => {
   const st = getTireRecapStyle(t.recapagens);
+  const chassis = variant === 'chassis';
   return (
     <div
       tabIndex={0}
       draggable
-      className={cx('tire', selected && 'tire-sel')}
+      className={cx('tire', chassis && 'ctire', selected && 'tire-sel')}
       style={{ backgroundColor: st.c }}
       onDragStart={() => onDragStartTire(t.id)}
       onDragEnd={onDragEndTire}
@@ -265,8 +268,17 @@ export const TireChip: React.FC<{
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(t.id)}
       title={`Fogo #${t.fogo} | ${t.marca} | ${st.label} | KM: ${formatNumber(t.kmTotal)}`}
     >
-      <b className="mono ef-t12_5 leading-none">{t.fogo}</b>
-      <span className="ef-t9_5 opacity-80 leading-none mt-1">{formatNumber(t.kmTotal)} km</span>
+      {chassis ? (
+        <span className="tlbl mono">
+          <b>{t.fogo}</b>
+          <span>{formatNumber(t.kmTotal)} km</span>
+        </span>
+      ) : (
+        <>
+          <b className="mono ef-t12_5 leading-none">{t.fogo}</b>
+          <span className="ef-t9_5 opacity-80 leading-none mt-1">{formatNumber(t.kmTotal)} km</span>
+        </>
+      )}
     </div>
   );
 };
