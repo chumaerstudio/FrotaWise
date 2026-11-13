@@ -59,8 +59,16 @@ describe('Suíte Completa Snapshot 3.5.0 (Issues FE-02 a FE-12)', () => {
   });
 
   it('FE-07: gera 10 slots de rodagem + ESTEPE-1 para veículo de 3 eixos e bloqueia redução com pneu montado', () => {
-    const slots3Eixos = getVehicleChassisSlots(3);
+    const layout3Eixos = getVehicleChassisSlots(3);
+    const slots3Eixos = [
+      layout3Eixos.spareSlot.code,
+      ...layout3Eixos.axles.flatMap((eixo) => [
+        ...eixo.leftSlots.map((slot) => slot.code),
+        ...eixo.rightSlots.map((slot) => slot.code),
+      ]),
+    ];
     expect(slots3Eixos).toHaveLength(11);
+    expect(new Set(slots3Eixos).size).toBe(11);
     expect(slots3Eixos).toContain('E3-DE');
     expect(slots3Eixos).toContain('ESTEPE-1');
 

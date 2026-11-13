@@ -1617,7 +1617,6 @@ export const GlobalModals: React.FC = () => {
                                 min={h.kmInicial}
                                 className="inp mono"
                                 style={{ width: 130 }}
-<<<<<<< HEAD
                                 value={historyEdit?.kmFinal ?? ''}
                                 onChange={(e) => {
                                   if (h.id == null) return;
@@ -1632,12 +1631,6 @@ export const GlobalModals: React.FC = () => {
                                   handleEditTireMovement(hTire.id, h.id);
                                 }}
                               >
-=======
-                                value={historyEdit.kmFinal}
-                                onChange={(e) => setHistoryEdit({ id: h.id, kmFinal: e.target.value })}
-                              />
-                              <Btn sm v="primary" onClick={() => handleEditTireMovement(hTire.id, h.id)}>
->>>>>>> 94e87f8 (Novas atualizações)
                                 Salvar KM final
                               </Btn>
                               <Btn sm onClick={() => setHistoryEdit(null)}>
@@ -1646,7 +1639,6 @@ export const GlobalModals: React.FC = () => {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-<<<<<<< HEAD
                               <Btn
                                 sm
                                 onClick={() => {
@@ -1667,12 +1659,6 @@ export const GlobalModals: React.FC = () => {
                                   handleCancelTireMovement(hTire.id, h.id);
                                 }}
                               >
-=======
-                              <Btn sm onClick={() => setHistoryEdit({ id: h.id, kmFinal: String(h.kmFinal ?? '') })}>
-                                Editar KM final
-                              </Btn>
-                              <Btn sm className="ef-del" onClick={() => handleCancelTireMovement(hTire.id, h.id)}>
->>>>>>> 94e87f8 (Novas atualizações)
                                 Cancelar movimentação
                               </Btn>
                             </div>

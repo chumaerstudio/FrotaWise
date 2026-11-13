@@ -252,8 +252,6 @@ describe('Cores de status', () => {
     expect(getClassificacaoTone('Sucatear')).toBe('red');
   });
 });
-<<<<<<< HEAD
-=======
 
 // ===== Chassi (Bitruck), Custo Fixo e Financeiro =====
 import { getVehicleChassisSlots, migrarPosicoesLegadasBitruck, singleAxleCount } from '@/services/veiculosService';
@@ -341,4 +339,3 @@ describe('Custo fixo por veículo ↔ Financeiro', () => {
     expect(validarCustoFixo({ veiculoId: 'v', descricao: 'x', valorMensal: 1, diaVencimento: 5, inicio: '2026-01', fim: null })).toBe('');
   });
 });
->>>>>>> 94e87f8 (Novas atualizações)

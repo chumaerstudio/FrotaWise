@@ -1,24 +1,16 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-<<<<<<< HEAD
-import { Wrench, FileWarning, Plus } from 'lucide-react';
-=======
 import { Wrench, FileWarning, Plus, Calendar } from 'lucide-react';
->>>>>>> 94e87f8 (Novas atualizações)
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatCurrency, formatNumber } from '@/services/api';
 import { Btn, Chip, Empty, Modal, Plate, PlateFilter } from '@/components/ui';
 import { getMultaStatusTone } from '@/services/statusTones';
 import { ehNic, multaOriginalDaNic, nicsDaMulta, normPlaca } from '@/services/multasService';
-<<<<<<< HEAD
-import type { Multa } from '@/types/frotawise';
-=======
 import { CustoFixoModal } from '@/components/custos/CustoFixoModal';
 import { idCompetencia, situacaoDoCusto, totalMensalVigente, vencimentoDaCompetencia, vigenteNoMes } from '@/services/custosFixosService';
 import { localToday } from '@/services/financeiroLocal';
 import type { CustoFixo, Multa } from '@/types/frotawise';
->>>>>>> 94e87f8 (Novas atualizações)
 
 export default function CustosMultasPage() {
   const {
@@ -33,12 +25,6 @@ export default function CustosMultasPage() {
     setShowFineModal,
     startEditFine,
     handleDeleteFine,
-<<<<<<< HEAD
-    liveMode,
-  } = useEstoquePneus();
-
-  const [expenseSubTab, setExpenseSubTab] = useState<'maintenances' | 'fines'>('maintenances');
-=======
     custosFixos,
     setCustosFixos,
     pagamentos,
@@ -52,7 +38,6 @@ export default function CustosMultasPage() {
   const [fixedModal, setFixedModal] = useState<{ custo: CustoFixo | null } | null>(null);
   const hoje = localToday();
   const mesAtual = hoje.slice(0, 7);
->>>>>>> 94e87f8 (Novas atualizações)
   // Filtros por placa (um por aba), independentes entre si.
   const [maintPlate, setMaintPlate] = useState('');
   const [finePlate, setFinePlate] = useState('');
@@ -78,8 +63,6 @@ export default function CustosMultasPage() {
   const sum = (arr: { valor: number }[]) => arr.reduce((a, x) => a + (Number(x.valor) || 0), 0);
 
   const detailFine = fines.find((f) => f.id === detailFineId) || null;
-<<<<<<< HEAD
-=======
 
   const visibleFixed = useMemo(
     () =>
@@ -126,7 +109,6 @@ export default function CustosMultasPage() {
     setPagamentos((p) => p.filter((x) => !(x.origem === 'custoFixo' && x.origemId.startsWith(`${c.id}:`))));
     showToast('Custo fixo excluído.');
   };
->>>>>>> 94e87f8 (Novas atualizações)
 
   return (
     <div className="space-y-5">
@@ -173,32 +155,6 @@ export default function CustosMultasPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-<<<<<<< HEAD
-        {expenseSubTab === 'maintenances' ? (
-          <PlateFilter id="plate-maint" value={maintPlate} onChange={setMaintPlate} plates={plates} />
-        ) : (
-          <PlateFilter id="plate-fines" value={finePlate} onChange={setFinePlate} plates={plates} />
-        )}
-        {(expenseSubTab === 'maintenances' ? maintPlate : finePlate).trim() && (
-          <>
-            <span className="ef-t13" style={{ color: 'var(--mute)' }}>
-              {expenseSubTab === 'maintenances'
-                ? `${visibleMaint.length} de ${maintenances.length} manutenções · ${formatCurrency(sum(visibleMaint))}`
-                : `${visibleFines.length} de ${fines.length} multas · ${formatCurrency(sum(visibleFines))}`}
-            </span>
-            <Btn
-              sm
-              onClick={() => (expenseSubTab === 'maintenances' ? setMaintPlate('') : setFinePlate(''))}
-            >
-              Limpar filtro
-            </Btn>
-          </>
-        )}
-      </div>
-
-      <div className="card overflow-hidden ef-rise" key={expenseSubTab}>
-        {expenseSubTab === 'maintenances' ? (
-=======
         {expenseSubTab === 'maintenances' ? (
           <PlateFilter id="plate-maint" value={maintPlate} onChange={setMaintPlate} plates={plates} />
         ) : expenseSubTab === 'fines' ? (
@@ -310,7 +266,6 @@ export default function CustosMultasPage() {
             </>
           )
         ) : expenseSubTab === 'maintenances' ? (
->>>>>>> 94e87f8 (Novas atualizações)
           visibleMaint.length === 0 ? (
             <Empty
               icon={Wrench}
@@ -494,8 +449,6 @@ export default function CustosMultasPage() {
         )}
       </div>
 
-<<<<<<< HEAD
-=======
       {fixedModal && (
         <CustoFixoModal
           vehicles={vehicles}
@@ -507,7 +460,6 @@ export default function CustosMultasPage() {
         />
       )}
 
->>>>>>> 94e87f8 (Novas atualizações)
       {detailFine && (
         <FineDetailModal
           fine={detailFine}

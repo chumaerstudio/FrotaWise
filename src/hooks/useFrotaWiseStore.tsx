@@ -16,10 +16,7 @@ import {
   TipoOperacaoPneu,
   Veiculo,
   Viagem,
-<<<<<<< HEAD
-=======
   CustoFixo,
->>>>>>> 94e87f8 (Novas atualizações)
 } from '@/types/frotawise';
 import { INITIAL_COMPANY, INITIAL_TIRES, getTireLimits, normTxt } from '@/services/pneusService';
 import {
@@ -37,10 +34,7 @@ import {
 } from '@/services/veiculosService';
 import { INITIAL_TRIPS, normalizarViagens, sincronizarDespesaAbastecimento } from '@/services/viagensService';
 import { normalizarMultas } from '@/services/multasService';
-<<<<<<< HEAD
-=======
 import { normalizarCustosFixos } from '@/services/custosFixosService';
->>>>>>> 94e87f8 (Novas atualizações)
 import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, STORAGE_KEYS, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 import { normalizeStoredValue } from '@/lib/storage';
 import { httpClient } from '@/lib/http/client';
@@ -77,11 +71,8 @@ interface FrotaWiseContextValue {
   setFuelings: React.Dispatch<React.SetStateAction<Abastecimento[]>>;
   trips: Viagem[];
   setTrips: React.Dispatch<React.SetStateAction<Viagem[]>>;
-<<<<<<< HEAD
-=======
   custosFixos: CustoFixo[];
   setCustosFixos: React.Dispatch<React.SetStateAction<CustoFixo[]>>;
->>>>>>> 94e87f8 (Novas atualizações)
   pagamentos: PagamentoPlano[];
   setPagamentos: React.Dispatch<React.SetStateAction<PagamentoPlano[]>>;
   contas: ContaPagar[];
@@ -256,15 +247,12 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         ? arr.map((f) => ({ tipo: 'Diesel', fornecedor: '', viagemId: null, ...f }))
         : []
   );
-<<<<<<< HEAD
-=======
   // Custos fixos mensais por veículo (modo DEMO). Cada mês vira um pagamento no Financeiro.
   const [custosFixos, setCustosFixos] = useLocalState<CustoFixo[]>(
     STORAGE_KEYS.CUSTOS_FIXOS,
     [],
     (arr) => normalizarCustosFixos(arr)
   );
->>>>>>> 94e87f8 (Novas atualizações)
   // Viagens: módulo local (modo DEMO). O abastecimento NÃO depende de viagem.
   const [trips, setTrips] = useLocalState<Viagem[]>(
     STORAGE_KEYS.TRIPS,
@@ -781,10 +769,7 @@ O histórico dele também será apagado.`
       fines,
       fuelings,
       trips,
-<<<<<<< HEAD
-=======
       custosFixos,
->>>>>>> 94e87f8 (Novas atualizações)
       pagamentos,
       contas,
     };
@@ -817,11 +802,8 @@ O histórico dele também será apagado.`
         setFuelings,
         trips,
         setTrips,
-<<<<<<< HEAD
-=======
         custosFixos,
         setCustosFixos,
->>>>>>> 94e87f8 (Novas atualizações)
         pagamentos,
         setPagamentos,
         contas,

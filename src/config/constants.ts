@@ -13,10 +13,7 @@ export const STORAGE_KEYS = Object.freeze({
   PAGAMENTOS: 'ecofrota_v3_pagamentos',
   CONTAS: 'ecofrota_v3_contas',
   TRIPS: 'ecofrota_v3_trips',
-<<<<<<< HEAD
-=======
   CUSTOS_FIXOS: 'ecofrota_v3_custos_fixos',
->>>>>>> 94e87f8 (Novas atualizações)
 });
 
 export function formatCurrencyBRL(value: number): string {
