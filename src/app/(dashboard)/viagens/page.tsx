@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { tripPayload } from '@/services/operacional39Service';
 import { Route, Plus, Fuel, DollarSign, Gauge } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatCurrency, formatNumber, today } from '@/services/api';
@@ -40,13 +41,14 @@ export default function ViagensPage() {
     maintenances,
     setFuelings,
     showToast,
-    liveMode,
+    liveMode, runLiveMutation,
   } = useEstoquePneus();
 
   const [plate, setPlate] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<TripForm | null>(null);
+  const [createKey, setCreateKey] = useState('');
 
   const plates = useMemo(() => vehicles.map((v) => v.placa).sort(), [vehicles]);
   const rows = useMemo(() => {
@@ -55,18 +57,6 @@ export default function ViagensPage() {
       .filter((t) => !q || normPlaca(vehicles.find((v) => v.id === t.veiculoId)?.placa).includes(q))
       .sort((a, b) => b.numero - a.numero);
   }, [trips, plate, vehicles]);
-
-  if (liveMode) {
-    return (
-      <div className="card ef-rise">
-        <Empty
-          icon={Route}
-          title="Viagens indisponíveis no modo API"
-          text="O backend atual ainda não possui endpoints de viagens. Nesta entrega o módulo funciona no modo DEMO/offline, com dados no armazenamento local do navegador."
-        />
-      </div>
-    );
-  }
 
   const blank = (veiculoId = ''): TripForm => ({
     numero: String(proximoNumeroViagem(trips)),
@@ -83,11 +73,13 @@ export default function ViagensPage() {
 
   const openNew = () => {
     setEditingId(null);
+    setCreateKey(crypto.randomUUID());
     setForm(blank());
     setOpen(true);
   };
   const openEdit = (t: Viagem) => {
     setEditingId(t.id);
+    setCreateKey('');
     setForm({
       numero: String(t.numero),
       veiculoId: t.veiculoId,
@@ -138,6 +130,23 @@ export default function ViagensPage() {
         ...form.despesas.filter((d) => d.origem === 'manual' && (d.descricao.trim() || Number(d.valor))),
       ],
     };
+    if (liveMode) {
+      const payload = tripPayload(trip);
+      // O backend não permite mudar número/veículo após a criação.
+      const changes = {
+        data: payload.data, origem: payload.origem, destino: payload.destino,
+        kmInicial: payload.kmInicial, kmFinal: payload.kmFinal, obs: payload.obs,
+        itens: payload.itens, despesas: payload.despesas,
+      };
+      void runLiveMutation(
+        editingId ? 'patch' : 'post',
+        editingId ? `/viagens/${editingId}` : '/viagens',
+        editingId ? changes : payload,
+        editingId ? 'Viagem atualizada no servidor.' : 'Viagem cadastrada no servidor.',
+        !editingId, createKey
+      ).then((ok) => { if (ok) close(); });
+      return;
+    }
     const next = editingId ? trips.map((t) => (t.id === editingId ? trip : t)) : [trip, ...trips];
     setTrips(next);
     // O KM final/inicial da viagem é leitura de hodômetro: atualiza o veículo (nunca soma).
@@ -154,6 +163,10 @@ export default function ViagensPage() {
 
   const remove = (t: Viagem) => {
     const vinc = fuelings.filter((f) => f.viagemId === t.id).length;
+    if (liveMode && vinc) {
+      showToast('Esta viagem tem abastecimentos vinculados. Desvincule-os primeiro.', 'error');
+      return;
+    }
     if (
       !window.confirm(
         `Excluir a viagem nº ${t.numero}?${
@@ -162,6 +175,11 @@ export default function ViagensPage() {
       )
     )
       return;
+    if (liveMode) {
+      // O servidor confirma exclusão com validação de vínculos e permissão ADMIN.
+      void runLiveMutation('delete', `/viagens/${t.id}`, undefined, 'Viagem excluída no servidor.');
+      return;
+    }
     // O abastecimento nunca depende de viagem: apenas perde o vínculo.
     setFuelings((p) => p.map((f) => (f.viagemId === t.id ? { ...f, viagemId: null } : f)));
     setTrips((p) => p.filter((x) => x.id !== t.id));
@@ -273,12 +291,12 @@ export default function ViagensPage() {
           <form onSubmit={save} className="space-y-3">
             <div className="grid grid-cols-3 gap-3">
               <Field label="Nº da viagem">
-                <input type="number" min="1" required className="inp mono" value={form.numero}
+                <input type="number" min="1" required disabled={liveMode && !!editingId} className="inp mono" value={form.numero}
                   onChange={(e) => setForm({ ...form, numero: e.target.value })} />
               </Field>
               <div className="col-span-2">
                 <Field label="Veículo">
-                  <select required className="inp" value={form.veiculoId}
+                  <select required disabled={liveMode && !!editingId} className="inp" value={form.veiculoId}
                     onChange={(e) => {
                       const id = e.target.value;
                       const v = vehicles.find((x) => x.id === id);

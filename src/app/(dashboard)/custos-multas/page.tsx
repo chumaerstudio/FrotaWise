@@ -10,6 +10,7 @@ import { ehNic, multaOriginalDaNic, nicsDaMulta, normPlaca } from '@/services/mu
 import { CustoFixoModal } from '@/components/custos/CustoFixoModal';
 import { idCompetencia, situacaoDoCusto, totalMensalVigente, vencimentoDaCompetencia, vigenteNoMes } from '@/services/custosFixosService';
 import { localToday } from '@/services/financeiroLocal';
+import { costPayload } from '@/services/operacional39Service';
 import type { CustoFixo, Multa } from '@/types/frotawise';
 
 export default function CustosMultasPage() {
@@ -30,12 +31,13 @@ export default function CustosMultasPage() {
     pagamentos,
     setPagamentos,
     showToast,
-    liveMode,
+    liveMode, runLiveMutation,
   } = useEstoquePneus();
 
   const [expenseSubTab, setExpenseSubTab] = useState<'maintenances' | 'fines' | 'fixed'>('maintenances');
   const [fixedPlate, setFixedPlate] = useState('');
   const [fixedModal, setFixedModal] = useState<{ custo: CustoFixo | null } | null>(null);
+  const [newCostKey, setNewCostKey] = useState('');
   const hoje = localToday();
   const mesAtual = hoje.slice(0, 7);
   // Filtros por placa (um por aba), independentes entre si.
@@ -90,6 +92,12 @@ export default function CustosMultasPage() {
   };
   const saveFixed = (c: CustoFixo) => {
     const exists = custosFixos.some((x) => x.id === c.id);
+    if (liveMode) {
+      void runLiveMutation(exists ? 'put' : 'post', exists ? `/custos-fixos/${c.id}` : '/custos-fixos',
+        costPayload(c), exists ? 'Custo fixo atualizado.' : 'Custo fixo cadastrado.', !exists, newCostKey)
+        .then((ok) => { if (ok) setFixedModal(null); });
+      return;
+    }
     setCustosFixos((p) => (exists ? p.map((x) => (x.id === c.id ? c : x)) : [c, ...p]));
     setFixedModal(null);
     showToast(
@@ -101,10 +109,17 @@ export default function CustosMultasPage() {
   const deleteFixed = (c: CustoFixo) => {
     if (
       !window.confirm(
-        `Excluir o custo fixo "${c.descricao}" (${plateOf(c.veiculoId) || 'N/A'})?\n\nTodos os meses dele saem do Financeiro, inclusive os já pagos. Para manter o histórico, use Editar e informe o mês final ou desative o custo.`
+        liveMode
+          ? `Excluir o custo fixo "${c.descricao}" (${plateOf(c.veiculoId) || 'N/A'})? Custos com pagamentos registrados não podem ser excluídos; encerre sua vigência.`
+          : `Excluir o custo fixo "${c.descricao}" (${plateOf(c.veiculoId) || 'N/A'})?\n\nTodos os meses dele saem do Financeiro, inclusive os já pagos. Para manter o histórico, use Editar e informe o mês final ou desative o custo.`
       )
     )
       return;
+    if (liveMode) {
+      // Pagamentos já baixados impedem exclusão no servidor, preservando auditoria.
+      void runLiveMutation('delete', `/custos-fixos/${c.id}`, undefined, 'Custo fixo excluído.');
+      return;
+    }
     setCustosFixos((p) => p.filter((x) => x.id !== c.id));
     setPagamentos((p) => p.filter((x) => !(x.origem === 'custoFixo' && x.origemId.startsWith(`${c.id}:`))));
     showToast('Custo fixo excluído.');
@@ -146,8 +161,8 @@ export default function CustosMultasPage() {
           <Btn v="danger" icon={Plus} onClick={() => setShowFineModal(true)}>
             Lançar multa / NIC
           </Btn>
-          {!liveMode && (
-            <Btn v="primary" icon={Plus} onClick={() => setFixedModal({ custo: null })}>
+          {(
+            <Btn v="primary" icon={Plus} onClick={() => {setNewCostKey(crypto.randomUUID()); setFixedModal({ custo: null });}}>
               Custo fixo
             </Btn>
           )}
@@ -181,14 +196,7 @@ export default function CustosMultasPage() {
 
       <div className="card overflow-hidden ef-rise" key={expenseSubTab}>
         {expenseSubTab === 'fixed' ? (
-          liveMode ? (
-            <Empty
-              icon={Calendar}
-              title="Custo fixo indisponível no modo API"
-              text="O backend atual ainda não possui custos fixos. No modo DEMO/offline a aba funciona e sincroniza com o Financeiro."
-            />
-          ) : (
-            <>
+          <>
               <div className="px-5 py-4 flex flex-wrap items-center gap-2" style={{ borderBottom: '1px solid var(--line2)' }}>
                 <span className="ef-t13 font-semibold mr-1">Fixo mensal por veículo:</span>
                 {porVeiculo.length === 0 ? (
@@ -253,7 +261,7 @@ export default function CustosMultasPage() {
                               {fin ? <Chip tone={fin.tone}>{fin.label} · {fin.venc.split('-').reverse().slice(0, 2).join('/')}</Chip> : <span style={{ color: 'var(--mute)' }}>—</span>}
                             </td>
                             <td className="text-right whitespace-nowrap ef-sx15">
-                              <Btn sm onClick={() => setFixedModal({ custo: c })}>Editar</Btn>
+                              <Btn sm onClick={() => {setNewCostKey(''); setFixedModal({ custo: c });}}>Editar</Btn>
                               <Btn sm className="ef-del" onClick={() => deleteFixed(c)}>Excluir</Btn>
                             </td>
                           </tr>
@@ -264,7 +272,6 @@ export default function CustosMultasPage() {
                 </div>
               )}
             </>
-          )
         ) : expenseSubTab === 'maintenances' ? (
           visibleMaint.length === 0 ? (
             <Empty

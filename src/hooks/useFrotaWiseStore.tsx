@@ -38,6 +38,7 @@ import { normalizarCustosFixos } from '@/services/custosFixosService';
 import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, STORAGE_KEYS, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 import { normalizeStoredValue } from '@/lib/storage';
 import { httpClient } from '@/lib/http/client';
+import { mapAccounts, mapCosts, mapPlans, mapTrips } from '@/services/operacional39Service';
 import { getClientEnv } from '@/config/env';
 
 interface TireActionModalState {
@@ -163,7 +164,7 @@ interface FrotaWiseContextValue {
   isLoadingLiveData: boolean;
   liveError: string | null;
   refreshLiveData: () => Promise<void>;
-  runLiveMutation: (method: 'post'|'put'|'patch'|'delete', path: string, payload?: unknown, success?: string, idempotent?: boolean) => Promise<boolean>;
+  runLiveMutation: (method: 'post'|'put'|'patch'|'delete', path: string, payload?: unknown, success?: string, idempotent?: boolean, retryKey?: string) => Promise<boolean>;
 }
 
 const FrotaWiseContext = createContext<FrotaWiseContextValue | null>(null);
@@ -209,6 +210,8 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingLiveData, setIsLoadingLiveData] = useState(liveMode);
   const [liveError, setLiveError] = useState<string | null>(null);
   const liveMutationInFlight = useRef(new Set<string>());
+  // Descarta respostas iniciadas antes de uma troca/encerramento de sessão.
+  const liveRefreshGeneration = useRef(0);
   const [remotePreventiveList, setRemotePreventiveList] = useState<AlertaPreventivaItem[]>([]);
   const [remoteTireAlerts, setRemoteTireAlerts] = useState<AlertaRemold[]>([]);
   const [company, setCompany] = useLocalState<EmpresaConfig>(
@@ -247,19 +250,19 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         ? arr.map((f) => ({ tipo: 'Diesel', fornecedor: '', viagemId: null, ...f }))
         : []
   );
-  // Custos fixos mensais por veículo (modo DEMO). Cada mês vira um pagamento no Financeiro.
+  // Custos fixos: no modo API o estado vem exclusivamente do servidor.
   const [custosFixos, setCustosFixos] = useLocalState<CustoFixo[]>(
     STORAGE_KEYS.CUSTOS_FIXOS,
     [],
     (arr) => normalizarCustosFixos(arr)
   );
-  // Viagens: módulo local (modo DEMO). O abastecimento NÃO depende de viagem.
+  // Viagens: no modo API são recuperadas do banco; DEMO mantém dados locais.
   const [trips, setTrips] = useLocalState<Viagem[]>(
     STORAGE_KEYS.TRIPS,
     INITIAL_TRIPS,
     (arr) => normalizarViagens(arr)
   );
-  // O financeiro do modo DEMO é persistido no navegador. O modo API aguarda endpoints próprios.
+  // Planos financeiros em API são persistidos no Postgres, sem fallback para localStorage.
   const [pagamentos, setPagamentos] = useLocalState<PagamentoPlano[]>(
     STORAGE_KEYS.PAGAMENTOS, [],
     (arr) => Array.isArray(arr) ? arr.map((p) => ({ forma: 'avista', parcelas: 1, vencimento: '', pagas: {}, ...p })) : []
@@ -271,48 +274,80 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
 
   const refreshLiveData = async () => {
     if (!liveMode) return;
+    const generation = ++liveRefreshGeneration.current;
     try {
-      const response = await httpClient.get<{
-        company: EmpresaConfig; vehicles: Veiculo[]; tires: Pneu[];
-        maintenances: Manutencao[]; fines: Multa[]; fuelings: Abastecimento[];
-        preventiveList: AlertaPreventivaItem[]; tireAlerts: AlertaRemold[];
-      }>('/bootstrap', {timeout: 30000});
-      const d = response.data;
+      // Todas as listas são consultadas antes da publicação do estado. Se uma
+      // falhar, não exibimos dados locais/antigos fingindo que vieram da API.
+      const [bootstrap, tripsResp, costsResp, accountsResp, plansResp] = await Promise.all([
+        httpClient.get<{
+          company: EmpresaConfig; vehicles: Veiculo[]; tires: Pneu[];
+          maintenances: Manutencao[]; fines: Multa[]; fuelings: Abastecimento[];
+          preventiveList: AlertaPreventivaItem[]; tireAlerts: AlertaRemold[];
+        }>('/bootstrap', { timeout: 30000 }),
+        httpClient.get('/viagens', { timeout: 30000 }),
+        httpClient.get('/custos-fixos', { timeout: 30000 }),
+        httpClient.get('/financeiro/contas', { timeout: 30000 }),
+        httpClient.get('/financeiro/pagamentos', { timeout: 30000 }),
+      ]);
+      const d = bootstrap.data;
+      const nextTrips = mapTrips(tripsResp.data);
+      const nextCosts = mapCosts(costsResp.data);
+      const nextAccounts = mapAccounts(accountsResp.data);
+      const nextPlans = mapPlans(plansResp.data);
+      // Resposta de uma sessão anterior nunca pode sobrescrever dados da atual.
+      if (generation !== liveRefreshGeneration.current) return;
       setCompany(d.company); setVehicles(d.vehicles); setTires(d.tires);
       setMaintenances(d.maintenances); setFines(d.fines); setFuelings(d.fuelings);
+      setTrips(nextTrips); setCustosFixos(nextCosts);
+      setContas(nextAccounts); setPagamentos(nextPlans);
       setRemotePreventiveList(d.preventiveList || []);
       setRemoteTireAlerts(d.tireAlerts || []);
       setSelectedChassisVehicleId(prev => d.vehicles.some(v => v.id === prev) ? prev : (d.vehicles[0]?.id || ''));
       setLiveError(null);
     } catch (error: any) {
+      if (generation !== liveRefreshGeneration.current) return;
       const msg = error?.response?.data?.detail || error?.message || 'Falha ao carregar dados do servidor';
       setLiveError(String(msg));
       throw error;
-    } finally { setIsLoadingLiveData(false); }
+    } finally {
+      if (generation === liveRefreshGeneration.current) setIsLoadingLiveData(false);
+    }
   };
 
   useEffect(() => {
     if (!liveMode) return;
     // Não carregar dados fictícios quando o backend não responder.
     const reload = () => { setIsLoadingLiveData(true); void refreshLiveData().catch(() => {}); };
-    const clear = () => { setVehicles([]); setTires([]); setMaintenances([]); setFuelings([]);
-      setFines([]); setPagamentos([]); setContas([]); setRemotePreventiveList([]); setRemoteTireAlerts([]); };
-    window.addEventListener('frotawise:session-changed', reload);
+    const clear = () => {
+      liveRefreshGeneration.current += 1;
+      setCompany({ ...INITIAL_COMPANY, nomeEmpresa: 'Sem sessão', cnpj: '' });
+      setVehicles([]); setTires([]); setMaintenances([]); setFuelings([]);
+      setFines([]); setTrips([]); setCustosFixos([]); setPagamentos([]); setContas([]);
+      setRemotePreventiveList([]); setRemoteTireAlerts([]); setLiveError(null);
+    };
+    const sessionChanged = () => {clear(); reload();};
+    window.addEventListener('frotawise:session-changed', sessionChanged);
     window.addEventListener('frotawise:session-ended', clear);
     reload();
-    return () => {window.removeEventListener('frotawise:session-changed',reload); window.removeEventListener('frotawise:session-ended',clear);};
+    return () => {window.removeEventListener('frotawise:session-changed',sessionChanged); window.removeEventListener('frotawise:session-ended',clear);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveMode]);
 
-  const runLiveMutation = async (method: 'post'|'put'|'patch'|'delete', path: string, payload?: unknown, success?: string, idempotent=false): Promise<boolean> => {
+  const runLiveMutation = async (method: 'post'|'put'|'patch'|'delete', path: string, payload?: unknown, success?: string, idempotent=false, retryKey?: string): Promise<boolean> => {
     // Bloqueia duplo clique concorrente na mesma operação.
     const flightId = `${method}:${path}`;
     if (liveMutationInFlight.current.has(flightId)) return false;
     liveMutationInFlight.current.add(flightId);
     try {
-      const headers = idempotent ? {'Idempotency-Key': crypto.randomUUID()} : undefined;
+      const headers = idempotent ? {'Idempotency-Key': retryKey || crypto.randomUUID()} : undefined;
       await httpClient.request({method, url: path, data: payload, headers, timeout: 30000});
-      await refreshLiveData();
+      try {
+        await refreshLiveData();
+      } catch {
+        // O write já foi confirmado: nunca sugerir repetir cegamente uma operação financeira.
+        showToast('Operação salva, mas a atualização dos dados falhou. Recarregue para conferir.', 'error');
+        return true;
+      }
       if (success) showToast(success);
       return true;
     } catch (e: any) {

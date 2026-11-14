@@ -957,7 +957,8 @@ export const GlobalModals: React.FC = () => {
       void awaitLive('post', '/abastecimentos', {
         veiculoId: fuelForm.veiculoId, tipo: fuelForm.tipo, data: fuelForm.data,
         litros: Number(fuelForm.litros), valorUnit: Number(fuelForm.valorUnit),
-        km: Number(fuelForm.km), fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado'
+        km: Number(fuelForm.km), fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado',
+        viagemId: fuelForm.viagemId || null
       }, 'Abastecimento registrado.', true).then(ok => {if (ok) closeFuelModal();});
       return;
     }
@@ -1013,6 +1014,7 @@ export const GlobalModals: React.FC = () => {
       void awaitLive('patch', `/abastecimentos/${old.id}`, {
         tipo: fuelForm.tipo, litros: Number(fuelForm.litros),
         valorUnit: Number(fuelForm.valorUnit), fornecedor: fuelForm.fornecedor.trim() || 'Posto não informado',
+        viagemId: fuelForm.viagemId || null,
       }, 'Abastecimento atualizado.').then(ok => {if (ok) closeFuelModal();});
       return;
     }
@@ -1053,12 +1055,20 @@ export const GlobalModals: React.FC = () => {
     if (!liveMode && !validatePaymentPlan(fineForm)) return;
     if (liveMode) {
       if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
+      const nic = fineForm.tipoLancamento === 'NIC';
+      const original = nic ? fines.find((f) => f.id === fineForm.multaOrigemId && !ehNic(f)) : null;
+      if (nic && (!original || original.veiculoId !== fineForm.veiculoId)) {
+        showToast('Selecione uma multa original do mesmo veículo para criar a NIC.', 'error'); return;
+      }
       void awaitLive('post', '/multas', {
         veiculoId: fineForm.veiculoId, ait: fineForm.ait.trim(), motivo: fineForm.motivo.trim(),
-        identificado: fineForm.identificado, motorista: fineForm.motorista || 'Não informado',
-        status: fineForm.status, data: fineForm.data, pontos: Number(fineForm.pontos),
+        identificado: nic ? original!.identificado : fineForm.identificado,
+        motorista: nic ? original!.motorista : fineForm.motorista || 'Não informado',
+        status: fineForm.status, data: fineForm.data, pontos: nic ? 0 : Number(fineForm.pontos),
         valorOriginal: Number(fineForm.valor),
-      }, 'Multa registrada.', true).then(ok => {if (ok) closeFineModal();});
+        tipoLancamento: nic ? 'NIC' : 'Multa', multaOrigemId: nic ? original!.id : null,
+      }, nic ? 'NIC vinculada e registrada no servidor.' : 'Multa registrada.', true)
+        .then(ok => {if (ok) closeFineModal();});
       return;
     }
     if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
@@ -2122,7 +2132,7 @@ export const GlobalModals: React.FC = () => {
                 ))}
               </select>
             </Field>
-            {!liveMode && (
+            {(
               <Field label="Viagem (opcional)">
                 <select
                   className="inp"
@@ -2300,7 +2310,7 @@ export const GlobalModals: React.FC = () => {
           onClose={closeFineModal}
         >
           <form onSubmit={editingFineId ? handleUpdateFine : handleCreateFine} className="space-y-3">
-            {!liveMode && !editingFineId && (
+            {!editingFineId && (
               <div>
                 <span className="lbl">Tipo de lançamento</span>
                 <div className="seg">

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { httpClient } from '@/lib/http/client';
+import { accountPayload, api39Error, createAccount, planPayload, savePlan } from '@/services/operacional39Service';
 import {
   AlertTriangle,
   Bell,
@@ -91,7 +93,7 @@ export default function FinanceiroPage() {
     setContas,
     custosFixos,
     showToast,
-    liveMode,
+    liveMode, runLiveMutation, refreshLiveData,
   } = useEstoquePneus();
 
   const [periodo, setPeriodo] = useState('todos');
@@ -102,6 +104,8 @@ export default function FinanceiroPage() {
   const [contaAberta, setContaAberta] = useState(false);
   const [editingContaId, setEditingContaId] = useState<string | null>(null);
   const [contaForm, setContaForm] = useState(EMPTY_CONTA());
+  const [contaCreateKey, setContaCreateKey] = useState('');
+  const [savingConta, setSavingConta] = useState(false);
 
   const finItems = useMemo(
     () => buildPayables({ fuelings, maintenances, fines, tires, vehicles, pagamentos, contas, custosFixos }),
@@ -137,6 +141,16 @@ export default function FinanceiroPage() {
 
   const payItem = (item: ItemFinanceiro) => {
     const plan = planOf(item);
+    if (liveMode) {
+      const next = {
+        origem: item.origem, origemId: item.origemId,
+        forma: plan?.forma ?? item.forma, parcelas: plan?.parcelas ?? item.parcelas,
+        vencimento: plan?.vencimento || item.primeiroVenc,
+        pagas: { ...(plan?.pagas || {}), [String(item.idx)]: localToday() },
+      };
+      void runLiveMutation('put', '/financeiro/pagamentos', planPayload(next), 'Baixa confirmada no servidor.');
+      return;
+    }
     upsertPlan(item.origem, item.origemId, {
       pagas: { ...(plan?.pagas || {}), [item.idx]: localToday() },
     });
@@ -151,8 +165,21 @@ export default function FinanceiroPage() {
   };
 
   const undoPayItem = (item: ItemFinanceiro) => {
-    const paid = { ...(planOf(item)?.pagas || {}) };
+    const plan = planOf(item);
+    if (liveMode && !plan) {
+      showToast('Este lançamento foi marcado como pago fora do Financeiro. Regularize o status na origem.', 'error');
+      return;
+    }
+    const paid = { ...(plan?.pagas || {}) };
     delete paid[String(item.idx)];
+    if (liveMode && plan) {
+      // O backend exige ADMIN para estorno/correção de uma parcela já paga.
+      void runLiveMutation('put', '/financeiro/pagamentos', planPayload({
+        origem: plan.origem, origemId: plan.origemId, forma: plan.forma,
+        parcelas: plan.parcelas, vencimento: plan.vencimento, pagas: paid,
+      }), 'Estorno confirmado no servidor.');
+      return;
+    }
     upsertPlan(item.origem, item.origemId, { pagas: paid });
     if (item.origem === 'multa') {
       setFines((prev) => prev.map((f) => (f.id === item.origemId && f.status === 'Paga' ? { ...f, status: 'Pendente' } : f)));
@@ -178,6 +205,7 @@ export default function FinanceiroPage() {
   const openContaModal = (id?: string) => {
     if (!id) {
       setEditingContaId(null);
+      setContaCreateKey(crypto.randomUUID());
       setContaForm(EMPTY_CONTA());
       setContaAberta(true);
       return;
@@ -199,7 +227,7 @@ export default function FinanceiroPage() {
     setContaAberta(true);
   };
 
-  const saveConta = (event: React.FormEvent) => {
+  const saveConta = async (event: React.FormEvent) => {
     event.preventDefault();
     const valor = Number(contaForm.valor);
     if (!contaForm.descricao.trim() || !(valor > 0) || !contaForm.vencimento) return;
@@ -222,6 +250,48 @@ export default function FinanceiroPage() {
       parcelas,
       vencimento: contaForm.vencimento,
     };
+
+    if (liveMode) {
+      if (savingConta) return;
+      setSavingConta(true);
+      let contaConfirmada = false;
+      let planoConfirmado = false;
+      // Cadastro da conta e plano são duas operações HTTP distintas na API.
+      // Em caso de falha da segunda, guardamos o ID da conta para um retry sem duplicá-la.
+      try {
+        const existing = editingContaId ? contas.find((c) => c.id === editingContaId) : null;
+        const accountData = { ...dados, data: existing?.data || localToday() };
+        let id = editingContaId;
+        if (id) {
+          await httpClient.put(`/financeiro/contas/${id}`, accountPayload(accountData));
+        } else {
+          const created = await createAccount(accountData, contaCreateKey);
+          id = created.id;
+          setEditingContaId(id);
+        }
+        contaConfirmada = true;
+        const current = pagamentos.find((p) => p.origem === 'conta' && p.origemId === id);
+        await savePlan({
+          origem: 'conta', origemId: id!, ...plano,
+          pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
+        });
+        planoConfirmado = true;
+        await refreshLiveData();
+        showToast('Conta e plano salvos no servidor.');
+        setContaAberta(false);
+        setEditingContaId(null);
+        setContaForm(EMPTY_CONTA());
+      } catch (err) {
+        // A primeira requisição pode ter sido confirmada. Nunca orientar um novo
+        // cadastro indiscriminado: o ID é mantido para uma tentativa segura.
+        if (planoConfirmado) showToast('Conta e plano salvos, mas a atualização da tela falhou. Recarregue a página.', 'error');
+        else if (contaConfirmada) showToast('A conta foi salva, porém o plano falhou: ' + api39Error(err), 'error');
+        else showToast(api39Error(err), 'error');
+      } finally {
+        setSavingConta(false);
+      }
+      return;
+    }
 
     if (editingContaId) {
       setContas((prev) => prev.map((c) => (c.id === editingContaId ? { ...c, ...dados } : c)));
@@ -246,6 +316,10 @@ export default function FinanceiroPage() {
   const deleteConta = (id: string) => {
     const conta = contas.find((c) => c.id === id);
     if (!conta || !window.confirm(`Excluir a conta "${conta.descricao}" (${formatCurrency(conta.valor)})? Todas as parcelas serão removidas.`)) return;
+    if (liveMode) {
+      void runLiveMutation('delete', `/financeiro/contas/${id}`, undefined, 'Conta excluída no servidor.');
+      return;
+    }
     setContas((prev) => prev.filter((c) => c.id !== id));
     setPagamentos((prev) => prev.filter((p) => !(p.origem === 'conta' && p.origemId === id)));
     showToast('Conta excluída.');
@@ -261,6 +335,14 @@ export default function FinanceiroPage() {
       return;
     }
     const current = pagamentos.find((p) => p.origem === payEdit.origem && p.origemId === payEdit.origemId);
+    if (liveMode) {
+      void runLiveMutation('put', '/financeiro/pagamentos', planPayload({
+        origem: payEdit.origem, origemId: payEdit.origemId,
+        forma: parcelado ? 'parcelado' : 'avista', parcelas, vencimento: payForm.vencimento,
+        pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
+      }), 'Plano atualizado no servidor.').then((ok) => { if (ok) setPayEdit(null); });
+      return;
+    }
     upsertPlan(payEdit.origem, payEdit.origemId, {
       forma: parcelado ? 'parcelado' : 'avista',
       parcelas,
@@ -270,21 +352,6 @@ export default function FinanceiroPage() {
     setPayEdit(null);
     showToast('Pagamento atualizado!');
   };
-
-  if (liveMode) {
-    return (
-      <div className="card p-6 space-y-3">
-        <div className="flex items-center gap-3">
-          <Wallet size={24} style={{ color: 'var(--blue-ink)' }} />
-          <h2 className="disp ef-t20 font-semibold">Financeiro</h2>
-        </div>
-        <Chip tone="amber">Integração com o servidor ainda não disponível</Chip>
-        <p className="ef-t13" style={{ color: 'var(--ink2)' }}>
-          O módulo financeiro da atualização 3.9.0 utiliza armazenamento local do navegador. Como este ambiente está conectado à API, os pagamentos e contas não seriam sincronizados com o servidor. Para evitar registros que pareçam salvos mas não estejam compartilhados, esta tela fica desabilitada no modo API.
-        </p>
-      </div>
-    );
-  }
 
   const hoje = localToday();
   const periodos = [...new Set([
@@ -509,8 +576,8 @@ export default function FinanceiroPage() {
       )}
 
       {contaAberta && (
-        <Modal title={editingContaId ? 'Editar conta a pagar' : 'Lançar conta a pagar'} onClose={() => { setContaAberta(false); setEditingContaId(null); setContaForm(EMPTY_CONTA()); }} wide>
-          <form onSubmit={saveConta} className="space-y-3">
+        <Modal title={editingContaId ? 'Editar conta a pagar' : 'Lançar conta a pagar'} onClose={() => { if (savingConta) return; setContaAberta(false); setEditingContaId(null); setContaForm(EMPTY_CONTA()); }} wide>
+          <form onSubmit={saveConta} className="space-y-3"><fieldset disabled={savingConta} className="space-y-3">
             <Field label="Categoria">
               <select className="inp" value={contaForm.tipo} onChange={(e) => setContaForm({ ...contaForm, tipo: e.target.value as TipoFinanceiro })}>
                 {TIPOS_FINANCEIRO.filter((tipo) => tipo !== 'Custo Fixo').map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
@@ -539,8 +606,8 @@ export default function FinanceiroPage() {
                 ))}
               </div>
             )}
-            <FormActions onCancel={() => { setContaAberta(false); setEditingContaId(null); setContaForm(EMPTY_CONTA()); }} label={editingContaId ? 'Salvar alterações' : 'Salvar conta'} v="primary" />
-          </form>
+            <FormActions onCancel={() => { if (savingConta) return; setContaAberta(false); setEditingContaId(null); setContaForm(EMPTY_CONTA()); }} label={editingContaId ? 'Salvar alterações' : 'Salvar conta'} v="primary" />
+          </fieldset></form>
         </Modal>
       )}
     </div>
