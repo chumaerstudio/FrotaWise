@@ -40,6 +40,9 @@ import { normalizeStoredValue } from '@/lib/storage';
 import { httpClient } from '@/lib/http/client';
 import { mapAccounts, mapCosts, mapPlans, mapTrips } from '@/services/operacional39Service';
 import { getClientEnv } from '@/config/env';
+import { friendlyError } from '@/lib/errors';
+
+export type ToastTone = 'success' | 'error' | 'warning' | 'info';
 
 interface TireActionModalState {
   tire: Pneu;
@@ -53,6 +56,13 @@ export interface MaintenancePrefill {
   categoria?: string;
   peca?: string;
   tipo?: TipoManutencao;
+}
+
+export interface PendingConfirmation {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  action: () => void | Promise<unknown>;
 }
 
 interface FrotaWiseContextValue {
@@ -78,8 +88,11 @@ interface FrotaWiseContextValue {
   setPagamentos: React.Dispatch<React.SetStateAction<PagamentoPlano[]>>;
   contas: ContaPagar[];
   setContas: React.Dispatch<React.SetStateAction<ContaPagar[]>>;
-  toast: { message: string; type: 'success' | 'error'; k: number } | null;
-  showToast: (message: string, type?: 'success' | 'error') => void;
+  toast: { message: string; type: ToastTone; k: number } | null;
+  showToast: (message: string, type?: ToastTone) => void;
+  dismissToast: (key?: number) => void;
+  pendingConfirmation: PendingConfirmation | null;
+  setPendingConfirmation: React.Dispatch<React.SetStateAction<PendingConfirmation | null>>;
   tireAlerts: AlertaRemold[];
   totalMaintenanceCost: number;
   totalFinesCost: number;
@@ -162,6 +175,8 @@ interface FrotaWiseContextValue {
   handleExportBackup: () => void;
   liveMode: boolean;
   isLoadingLiveData: boolean;
+  hasLoadedLiveData: boolean;
+  pendingMutationCount: number;
   liveError: string | null;
   refreshLiveData: () => Promise<void>;
   runLiveMutation: (method: 'post'|'put'|'patch'|'delete', path: string, payload?: unknown, success?: string, idempotent?: boolean, retryKey?: string) => Promise<boolean>;
@@ -208,6 +223,8 @@ function useLocalState<T>(
 export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const liveMode = getClientEnv().appMode === 'API';
   const [isLoadingLiveData, setIsLoadingLiveData] = useState(liveMode);
+  const [hasLoadedLiveData, setHasLoadedLiveData] = useState(!liveMode);
+  const [pendingMutationCount, setPendingMutationCount] = useState(0);
   const [liveError, setLiveError] = useState<string | null>(null);
   const liveMutationInFlight = useRef(new Set<string>());
   // Descarta respostas iniciadas antes de uma troca/encerramento de sessão.
@@ -275,6 +292,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   const refreshLiveData = async () => {
     if (!liveMode) return;
     const generation = ++liveRefreshGeneration.current;
+    setIsLoadingLiveData(true);
     try {
       // Todas as listas são consultadas antes da publicação do estado. Se uma
       // falhar, não exibimos dados locais/antigos fingindo que vieram da API.
@@ -303,11 +321,11 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       setRemotePreventiveList(d.preventiveList || []);
       setRemoteTireAlerts(d.tireAlerts || []);
       setSelectedChassisVehicleId(prev => d.vehicles.some(v => v.id === prev) ? prev : (d.vehicles[0]?.id || ''));
+      setHasLoadedLiveData(true);
       setLiveError(null);
     } catch (error: any) {
       if (generation !== liveRefreshGeneration.current) return;
-      const msg = error?.response?.data?.detail || error?.message || 'Falha ao carregar dados do servidor';
-      setLiveError(String(msg));
+      setLiveError(friendlyError(error, 'Não foi possível carregar as informações. Tente novamente.'));
       throw error;
     } finally {
       if (generation === liveRefreshGeneration.current) setIsLoadingLiveData(false);
@@ -324,6 +342,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       setVehicles([]); setTires([]); setMaintenances([]); setFuelings([]);
       setFines([]); setTrips([]); setCustosFixos([]); setPagamentos([]); setContas([]);
       setRemotePreventiveList([]); setRemoteTireAlerts([]); setLiveError(null);
+      setHasLoadedLiveData(false);
     };
     const sessionChanged = () => {clear(); reload();};
     window.addEventListener('frotawise:session-changed', sessionChanged);
@@ -338,6 +357,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
     const flightId = `${method}:${path}`;
     if (liveMutationInFlight.current.has(flightId)) return false;
     liveMutationInFlight.current.add(flightId);
+    setPendingMutationCount(count => count + 1);
     try {
       const headers = idempotent ? {'Idempotency-Key': retryKey || crypto.randomUUID()} : undefined;
       await httpClient.request({method, url: path, data: payload, headers, timeout: 30000});
@@ -350,21 +370,42 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
       }
       if (success) showToast(success);
       return true;
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      showToast(typeof detail === 'string' ? detail : 'Operação não concluída. Consulte os dados e tente novamente.', 'error');
+    } catch (e: unknown) {
+      showToast(friendlyError(e), 'error');
       return false;
-    } finally {liveMutationInFlight.current.delete(flightId);}
+    } finally {
+      liveMutationInFlight.current.delete(flightId);
+      setPendingMutationCount(count => Math.max(0, count - 1));
+    }
   };
 
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; k: number } | null>(
+  const [toast, setToast] = useState<{ message: string; type: ToastTone; k: number } | null>(
     null
   );
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastKey = useRef<number | null>(null);
+  const lastToast = useRef<{ message: string; type: ToastTone; timestamp: number } | null>(null);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type, k: Date.now() });
-    setTimeout(() => setToast(null), 3500);
+  const dismissToast = (key?: number) => {
+    if (key !== undefined && toastKey.current !== key) return;
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastKey.current = null;
+    setToast(null);
   };
+
+  const showToast = (message: string, type: ToastTone = 'success') => {
+    const now = Date.now();
+    if (lastToast.current?.message === message && lastToast.current.type === type && now - lastToast.current.timestamp < 1000) return;
+    lastToast.current = { message, type, timestamp: now };
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    const k = now;
+    toastKey.current = k;
+    setToast({ message, type, k });
+    toastTimer.current = setTimeout(() => { if (toastKey.current === k) { toastKey.current = null; setToast(null); } }, type === 'error' ? 7500 : 4800);
+  };
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const [selectedChassisVehicleId, setSelectedChassisVehicleId] = useState<string>('v1');
   const [selectedTireForActionId, setSelectedTireForActionId] = useState<string | null>(null);
@@ -658,30 +699,21 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleDeleteFuel = (f: Abastecimento) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(
-        `Excluir o abastecimento de ${f.data} (${formatDec(f.litros)} L · ${formatCurrency(
-          f.valorTotal
-        )})?
-O hodômetro do veículo será recalculado e a despesa vinculada à viagem (se houver) será removida.`
-      )
-    )
-      return;
-    if (liveMode) { void runLiveMutation('delete', `/abastecimentos/${f.id}`, undefined, 'Abastecimento excluído.'); return; }
-    const next = fuelings.filter((x) => x.id !== f.id);
-    setFuelings(next);
-    // Remove só a despesa gerada por este abastecimento; despesas manuais ficam.
-    const nextTrips = sincronizarDespesaAbastecimento(trips, null, f.id);
-    setTrips(nextTrips);
-    const mud = syncOdometers(
-      [f.veiculoId],
-      next,
-      maintenances,
-      'exclusão de abastecimento',
-      nextTrips
-    );
-    showToast('Abastecimento excluído.' + sufixoKm(mud));
+    setPendingConfirmation({
+      title: 'Excluir abastecimento?',
+      description: `${f.data} · ${formatDec(f.litros)} L · ${formatCurrency(f.valorTotal)}. O hodômetro será recalculado e a despesa vinculada à viagem, se houver, será removida.`,
+      confirmLabel: 'Excluir abastecimento',
+      action: () => {
+        if (liveMode) return runLiveMutation('delete', `/abastecimentos/${f.id}`, undefined, 'Abastecimento excluído.');
+        const next = fuelings.filter(x => x.id !== f.id);
+        setFuelings(next);
+        // Despesas manuais da viagem são preservadas.
+        const nextTrips = sincronizarDespesaAbastecimento(trips, null, f.id);
+        setTrips(nextTrips);
+        const mud = syncOdometers([f.veiculoId], next, maintenances, 'exclusão de abastecimento', nextTrips);
+        showToast('Abastecimento excluído.' + sufixoKm(mud));
+      },
+    });
   };
 
   const startEditMaint = (m: Manutencao) => {
@@ -690,20 +722,19 @@ O hodômetro do veículo será recalculado e a despesa vinculada à viagem (se h
   };
 
   const handleDeleteMaintenance = (m: Manutencao) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(
-        `Excluir a manutenção ${m.osNumero} (${m.descricao})?
-O hodômetro do veículo será recalculado.`
-      )
-    )
-      return;
-    if (liveMode) { void runLiveMutation('delete', `/manutencoes/${m.id}`, undefined, 'Manutenção excluída.'); return; }
-    const next = maintenances.filter((x) => x.id !== m.id);
-    setMaintenances(next);
-    setPagamentos((p) => p.filter((x) => !(x.origem === 'manutencao' && x.origemId === m.id)));
-    const mud = syncOdometers([m.veiculoId], fuelings, next, 'exclusão de manutenção');
-    showToast('Manutenção excluído.' + sufixoKm(mud));
+    setPendingConfirmation({
+      title: `Excluir manutenção ${m.osNumero}?`,
+      description: `${m.descricao}. Os registros financeiros vinculados poderão ser afetados e o hodômetro será recalculado.`,
+      confirmLabel: 'Excluir manutenção',
+      action: () => {
+        if (liveMode) return runLiveMutation('delete', `/manutencoes/${m.id}`, undefined, 'Manutenção excluída.');
+        const next = maintenances.filter(x => x.id !== m.id);
+        setMaintenances(next);
+        setPagamentos(p => p.filter(x => !(x.origem === 'manutencao' && x.origemId === m.id)));
+        const mud = syncOdometers([m.veiculoId], fuelings, next, 'exclusão de manutenção');
+        showToast('Manutenção excluída.' + sufixoKm(mud));
+      },
+    });
   };
 
   const startEditFine = (f: Multa) => {
@@ -712,24 +743,22 @@ O hodômetro do veículo será recalculado.`
   };
 
   const handleDeleteFine = (f: Multa) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(`Excluir a multa ${f.ait} (${formatCurrency(f.valor)})?`)
-    )
-      return;
-    if (liveMode) { void runLiveMutation('delete', `/multas/${f.id}`, undefined, 'Multa excluída.'); return; }
-    // Preserva o relacionamento: multa original com NIC vinculada não pode ser apagada.
-    const nicsVinculadas = fines.filter((x) => x.tipoLancamento === 'NIC' && x.multaOrigemId === f.id);
-    if (nicsVinculadas.length) {
-      showToast(
-        `A multa ${f.codigo || f.ait} possui ${nicsVinculadas.length} NIC vinculada(s). Exclua a(s) NIC antes de excluir a multa original.`,
-        'error'
-      );
-      return;
-    }
-    setFines((p) => p.filter((x) => x.id !== f.id));
-    setPagamentos((p) => p.filter((x) => !(x.origem === 'multa' && x.origemId === f.id)));
-    showToast('Multa excluída.');
+    setPendingConfirmation({
+      title: `Excluir multa ${f.ait}?`,
+      description: `Valor: ${formatCurrency(f.valor)}. Multas com NIC vinculada não podem ser removidas antes de resolver o vínculo.`,
+      confirmLabel: 'Excluir multa',
+      action: () => {
+        if (liveMode) return runLiveMutation('delete', `/multas/${f.id}`, undefined, 'Multa excluída.');
+        const nicsVinculadas = fines.filter(x => x.tipoLancamento === 'NIC' && x.multaOrigemId === f.id);
+        if (nicsVinculadas.length) {
+          showToast(`A multa ${f.codigo || f.ait} possui ${nicsVinculadas.length} NIC vinculada(s). Exclua a(s) NIC antes de excluir a multa original.`, 'error');
+          return;
+        }
+        setFines(p => p.filter(x => x.id !== f.id));
+        setPagamentos(p => p.filter(x => !(x.origem === 'multa' && x.origemId === f.id)));
+        showToast('Multa excluída.');
+      },
+    });
   };
 
   const startEditTire = (t: Pneu) => {
@@ -738,18 +767,17 @@ O hodômetro do veículo será recalculado.`
   };
 
   const handleDeleteTire = (t: Pneu) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(
-        `Excluir o pneu Fogo #${t.fogo} (${t.marca})?
-O histórico dele também será apagado.`
-      )
-    )
-      return;
-    if (liveMode) { void runLiveMutation('delete', `/pneus/${t.id}`, undefined, 'Pneu excluído.'); return; }
-    setTires((p) => p.filter((x) => x.id !== t.id));
-    if (selectedTireForActionId === t.id) setSelectedTireForActionId(null);
-    showToast(`Pneu Fogo #${t.fogo} excluído.`);
+    setPendingConfirmation({
+      title: `Excluir pneu #${t.fogo}?`,
+      description: `${t.marca} · ${t.medida}. O histórico de movimentações também será removido, se a exclusão for permitida.`,
+      confirmLabel: 'Excluir pneu',
+      action: () => {
+        if (liveMode) return runLiveMutation('delete', `/pneus/${t.id}`, undefined, 'Pneu excluído.');
+        setTires(p => p.filter(x => x.id !== t.id));
+        if (selectedTireForActionId === t.id) setSelectedTireForActionId(null);
+        showToast(`Pneu Fogo #${t.fogo} excluído.`);
+      },
+    });
   };
 
   const openTireOperationModal = (
@@ -762,7 +790,7 @@ O histórico dele também será apagado.`
   };
 
   const handleCompleteRecap = (tire: Pneu) => {
-    if (liveMode) { void runLiveMutation('post', `/pneus/${tire.id}/concluir-recapagem`, undefined, 'Recapagem concluída.'); return; }
+    if (liveMode) return runLiveMutation('post', `/pneus/${tire.id}/concluir-recapagem`, undefined, 'Recapagem concluída.');
     setTires((prev) =>
       prev.map((t) =>
         t.id === tire.id
@@ -783,14 +811,13 @@ O histórico dele também será apagado.`
 
   const handleExportBackup = () => {
     if (liveMode) {
-      void httpClient.get('/onboarding/exportar-backup').then(({data}) => {
+      return httpClient.get('/onboarding/exportar-backup').then(({data}) => {
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url;
         a.download = `FrotaWise_Export_${today()}.json`; a.click(); URL.revokeObjectURL(url);
-        showToast('Exportação realizada; não substitui backup do PostgreSQL.');
-      }).catch(() => showToast('Sem permissão para exportar ou servidor indisponível.', 'error'));
-      return;
+        showToast('Exportação realizada! Guarde uma cópia em local seguro.');
+      }).catch(() => showToast('Não foi possível exportar. Verifique sua permissão ou tente novamente mais tarde.', 'error'));
     }
     const payload = {
       sistema: 'FrotaWise Enterprise Offline',
@@ -815,7 +842,7 @@ O histórico dele também será apagado.`
     a.download = `FrotaWise_Backup_${today()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Arquivo de Backup gerado! Salve no seu Pen Drive.');
+    showToast('Arquivo de backup baixado. Guarde uma cópia em local seguro.');
   };
 
   return (
@@ -845,6 +872,9 @@ O histórico dele também será apagado.`
         setContas,
         toast,
         showToast,
+        dismissToast,
+        pendingConfirmation,
+        setPendingConfirmation,
         tireAlerts,
         totalMaintenanceCost,
         totalFinesCost,
@@ -901,7 +931,7 @@ O histórico dele também será apagado.`
         handleDeleteFuel,
         syncOdometers,
         handleExportBackup,
-        liveMode, isLoadingLiveData, liveError, refreshLiveData, runLiveMutation,
+        liveMode, isLoadingLiveData, hasLoadedLiveData, pendingMutationCount, liveError, refreshLiveData, runLiveMutation,
       }}
     >
       {children}

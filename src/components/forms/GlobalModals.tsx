@@ -25,6 +25,7 @@ import {
 } from '@/services/pneuKmService';
 import { getClassificacaoTone, getVeiculoStatusTone } from '@/services/statusTones';
 import { sincronizarDespesaAbastecimento } from '@/services/viagensService';
+import { formatDateShort } from '@/services/financeiroLocal';
 import {
   ehNic,
   gerarCodigoMulta,
@@ -78,6 +79,7 @@ export const GlobalModals: React.FC = () => {
     pagamentos,
     setPagamentos,
     showToast,
+    setPendingConfirmation,
     tireAlerts,
     selectedChassisVehicleId,
     setSelectedChassisVehicleId,
@@ -125,6 +127,8 @@ export const GlobalModals: React.FC = () => {
   const [actionMovId, setActionMovId] = useState('');
   const movimentosEnviados = useRef(new Set<string>());
   const [historyEdit, setHistoryEdit] = useState<{ id: string; kmFinal: string } | null>(null);
+  const [vehicleDetailFilter, setVehicleDetailFilter] = useState<'all' | 'm' | 'f' | 'a' | 'v'>('all');
+  useEffect(() => { setVehicleDetailFilter('all'); }, [detailVehicleId]);
 
   useEffect(() => {
     if (tireActionModal) {
@@ -549,23 +553,20 @@ export const GlobalModals: React.FC = () => {
   const handleCancelTireMovement = (tireId: string, movId: string) => {
     const t = tires.find((x) => x.id === tireId);
     if (!t) return;
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(
-        'Cancelar esta movimentação? O KM dela será estornado do pneu. A posição/local atual do pneu não é alterada.'
-      )
-    )
-      return;
-    const res = cancelarMovimentacao(t, movId, today());
-    if (res.erro) {
-      showToast(res.erro, 'error');
-      return;
-    }
-    const nextTires = tires.map((x) => (x.id === tireId ? res.tire : x));
-    setTires(nextTires);
-    const ids = Array.from(new Set((t.historicoVeiculos || []).map((h) => h.veiculoId).filter(Boolean) as string[]));
-    const mud = syncOdometers(ids, fuelings, maintenances, 'cancelamento de movimentação de pneu', trips, nextTires);
-    showToast(`Movimentação cancelada: pneu volta a ${formatNumber(res.tire.kmTotal)} km.` + sufixoKm(mud));
+    setPendingConfirmation({
+      title: 'Cancelar movimentação de pneu?',
+      description: 'A quilometragem desta movimentação será estornada. A posição atual do pneu não será alterada.',
+      confirmLabel: 'Cancelar movimentação',
+      action: () => {
+        const res = cancelarMovimentacao(t, movId, today());
+        if (res.erro) { showToast(res.erro, 'error'); return; }
+        const nextTires = tires.map(x => x.id === tireId ? res.tire : x);
+        setTires(nextTires);
+        const ids = Array.from(new Set((t.historicoVeiculos || []).map(h => h.veiculoId).filter(Boolean) as string[]));
+        const mud = syncOdometers(ids, fuelings, maintenances, 'cancelamento de movimentação de pneu', trips, nextTires);
+        showToast(`Movimentação cancelada: pneu volta a ${formatNumber(res.tire.kmTotal)} km.` + sufixoKm(mud));
+      },
+    });
   };
 
   const handleCreateVehicle = (e: React.FormEvent) => {
@@ -657,7 +658,7 @@ export const GlobalModals: React.FC = () => {
       const old = tires.find(t => t.id === editingTireId);
       if (!old) return;
       if (old.fogo !== tireForm.fogo.toUpperCase().trim() || old.recapagens !== Number(tireForm.recapagens) || old.kmTotal !== Number(tireForm.kmInicial)) {
-        showToast('O backend não permite alterar fogo, recapagens ou KM histórico pela edição. Use as operações de pneu.', 'error');
+        showToast('O número de fogo, as recapagens e o histórico de KM não podem ser alterados por aqui. Use as operações de pneu.', 'warning');
         return;
       }
       void awaitLive('patch', `/pneus/${old.id}`, {
@@ -814,7 +815,7 @@ export const GlobalModals: React.FC = () => {
       const old = maintenances.find(m => m.id === editingMaintId);
       if (!old) return;
       if (old.veiculoId !== maintenanceForm.veiculoId || Number(old.km) !== Number(maintenanceForm.km) || old.data !== maintenanceForm.data) {
-        showToast('KM, data e veículo são imutáveis após o lançamento no backend. Faça uma conciliação administrativa.', 'error');
+        showToast('Após o lançamento, KM, data e veículo não podem ser alterados. Solicite uma conciliação administrativa.', 'warning');
         return;
       }
       void awaitLive('patch', `/manutencoes/${old.id}`, {
@@ -1009,7 +1010,7 @@ export const GlobalModals: React.FC = () => {
       const old = fuelings.find(f => f.id === editingFuelId);
       if (!old) return;
       if (old.veiculoId !== fuelForm.veiculoId || old.km !== Number(fuelForm.km) || old.data !== fuelForm.data) {
-        showToast('O backend não permite editar veículo, data ou hodômetro do abastecimento. É preciso conciliação.', 'error'); return;
+        showToast('Para corrigir o veículo, a data ou o hodômetro deste abastecimento, solicite uma conciliação.', 'warning'); return;
       }
       void awaitLive('patch', `/abastecimentos/${old.id}`, {
         tipo: fuelForm.tipo, litros: Number(fuelForm.litros),
@@ -1067,7 +1068,7 @@ export const GlobalModals: React.FC = () => {
         status: fineForm.status, data: fineForm.data, pontos: nic ? 0 : Number(fineForm.pontos),
         valorOriginal: Number(fineForm.valor),
         tipoLancamento: nic ? 'NIC' : 'Multa', multaOrigemId: nic ? original!.id : null,
-      }, nic ? 'NIC vinculada e registrada no servidor.' : 'Multa registrada.', true)
+      }, nic ? 'NIC vinculada e registrada.' : 'Multa registrada.', true)
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
@@ -1147,7 +1148,7 @@ export const GlobalModals: React.FC = () => {
       const old = fines.find(f => f.id === editingFineId);
       if (!old) return;
       if (old.veiculoId !== fineForm.veiculoId || old.motivo !== fineForm.motivo.trim() || old.data !== fineForm.data || (old.valorOriginal ?? old.valor) !== Number(fineForm.valor) || old.ait !== fineForm.ait.trim() || old.identificado !== fineForm.identificado || (old.motorista || '') !== (fineForm.identificado ? fineForm.motorista || '' : 'Não identificado') || old.pontos !== (fineForm.identificado ? Number(fineForm.pontos) : 0)) {
-        showToast('O backend permite alterar somente o status da multa. Os demais dados não serão sobrescritos.', 'error'); return;
+        showToast('Somente a situação da multa pode ser alterada por aqui. Os demais dados permanecerão iguais.', 'warning'); return;
       }
       void awaitLive('patch', `/multas/${old.id}/status`, {status: fineForm.status}, 'Status da multa atualizado.')
         .then(ok => {if (ok) closeFineModal();});
@@ -1231,8 +1232,15 @@ export const GlobalModals: React.FC = () => {
           texto: f.motivo,
           valor: f.valor,
         })),
+      ...fuelings
+        .filter(f => f.veiculoId === v.id)
+        .map(f => ({ k: 'a', id: `a-${f.id}`, data: f.data, titulo: `Abastecimento · ${f.tipo}`, texto: `${formatDec(f.litros)} L · ${f.fornecedor || 'Fornecedor não informado'}`, valor: f.valorTotal })),
+      ...trips
+        .filter(t => t.veiculoId === v.id)
+        .map(t => ({ k: 'v', id: `v-${t.id}`, data: t.data, titulo: `Viagem nº ${t.numero}`, texto: [t.origem, t.destino].filter(Boolean).join(' → ') || 'Trecho não informado', valor: 0 })),
     ].sort((a, b) => String(b.data).localeCompare(String(a.data)));
-    const total = events.reduce((a, e) => a + Number(e.valor || 0), 0);
+    const total = events.filter(e => e.k !== 'v').reduce((a, e) => a + Number(e.valor || 0), 0);
+    const filteredEvents = vehicleDetailFilter === 'all' ? events : events.filter(e => e.k === vehicleDetailFilter);
 
     return (
       <Drawer onClose={close}>
@@ -1258,7 +1266,7 @@ export const GlobalModals: React.FC = () => {
               [
                 ['Hodômetro', `${formatNumber(v.kmAtual)} km`],
                 ['Eixos', v.eixos],
-                ['Despesas', formatCurrency(total)],
+                ['Gastos registrados', formatCurrency(total)],
               ] as const
             ).map(([l, val]) => (
               <div key={l} className="card p-3">
@@ -1355,20 +1363,22 @@ export const GlobalModals: React.FC = () => {
           </div>
 
           <div className="card p-5">
-            <h3 className="ef-t16 font-semibold mb-3">Linha do tempo de despesas</h3>
-            {events.length === 0 ? (
+            <h3 className="ef-t16 font-semibold mb-1">Histórico do veículo</h3>
+            <p className="ef-t12 mb-3" style={{color:'var(--mute)'}}>Abastecimentos, viagens, manutenções e multas relacionados à placa.</p>
+            <div className="ef-vehicle-filter-tabs" aria-label="Filtrar histórico do veículo">{([['all','Tudo'],['m','Manutenções'],['a','Abastecimentos'],['v','Viagens'],['f','Multas']] as const).map(([key,label]) => <button type="button" key={key} className={vehicleDetailFilter === key ? 'is-active' : ''} aria-pressed={vehicleDetailFilter === key} onClick={() => setVehicleDetailFilter(key)}>{label}</button>)}</div>
+            {filteredEvents.length === 0 ? (
               <div className="ef-t13" style={{ color: 'var(--mute)' }}>
-                Nenhuma manutenção ou multa lançada para este veículo.
+                Nenhum registro encontrado neste filtro.
               </div>
             ) : (
               <ol className="relative ef-ml1_5" style={{ borderLeft: '2px solid var(--line)' }}>
-                {events.map((e) => (
+                {filteredEvents.slice(0, 30).map((e) => (
                   <li key={e.id} className="pl-4 pb-4 relative">
                     <i
                       className="absolute top-1 w-3 h-3 rounded-full"
                       style={{
                         left: -7,
-                        background: e.k === 'f' ? 'var(--red)' : 'var(--teal)',
+                        background: e.k === 'f' ? 'var(--red)' : e.k === 'a' ? 'var(--blue)' : e.k === 'v' ? 'var(--amber)' : 'var(--teal)',
                         boxShadow: '0 0 0 3px var(--card)',
                       }}
                     />
@@ -1376,12 +1386,10 @@ export const GlobalModals: React.FC = () => {
                       <div className="min-w-0">
                         <div className="ef-t13 font-semibold">{e.titulo}</div>
                         <div className="ef-t12_5" style={{ color: 'var(--mute)' }}>
-                          {e.data} · {e.texto}
+                          {formatDateShort(e.data)} · {e.texto}
                         </div>
                       </div>
-                      <span className="mono ef-t12_5 font-bold shrink-0">
-                        {formatCurrency(e.valor)}
-                      </span>
+                      {e.k !== 'v' && <span className="mono ef-t12_5 font-bold shrink-0">{formatCurrency(e.valor)}</span>}
                     </div>
                   </li>
                 ))}

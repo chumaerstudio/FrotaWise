@@ -16,6 +16,7 @@ const SPARE_AREA = 175;
 interface Props {
   layout: VehicleChassisLayout;
   eixos: number;
+  zoomed?: boolean;
   /** Desenha o pneu montado ou a vaga da posição (o pai controla arrastar/soltar/seleção). */
   renderSlot: (slot: ChassisSlot) => React.ReactNode;
 }
@@ -24,7 +25,7 @@ interface Props {
  * Chassi realista em vista superior (frente à esquerda). Os pneus são desenhados por cima da
  * imagem e herdam a cor do status de recapagem (Novo, 1ª, 2ª, 3ª, Mais Recapagens).
  */
-export function ChassisView({ layout, eixos, renderSlot }: Props) {
+export function ChassisView({ layout, eixos, renderSlot, zoomed = false }: Props) {
   const asset = getChassisAsset(eixos);
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxW, setBoxW] = useState(0);
@@ -42,8 +43,10 @@ export function ChassisView({ layout, eixos, renderSlot }: Props) {
 
   const stageW = asset.width + SPARE_AREA;
   const stageH = asset.height + PAD_TOP + PAD_BOTTOM;
-  // Ajusta à largura disponível (entre 55% e 90% do tamanho da imagem).
-  const scale = boxW ? Math.max(0.55, Math.min(0.9, (boxW - 8) / stageW)) : 0.7;
+  // Por padrão, mostra o chassi inteiro; a opção Ampliar restaura pneus maiores.
+  // Assim, em telas pequenas, ainda é possível escolher o encaixe por lista.
+  const fittedScale = boxW ? Math.min(0.9, (boxW - 8) / stageW) : 0.7;
+  const scale = zoomed ? Math.max(0.58, fittedScale) : Math.max(0.19, fittedScale);
 
   const cell = (slot: ChassisSlot, left: number, top: number) => (
     <div

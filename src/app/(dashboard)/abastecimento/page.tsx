@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Fuel, DollarSign, FileWarning, Plus, Route } from 'lucide-react';
+import { Fuel, DollarSign, FileWarning, Route, AlertTriangle, Search } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatCurrency, formatDec, formatNumber, formatUnit } from '@/services/api';
 import { Btn, Chip, Empty, Kpi, Plate, SectionHead } from '@/components/ui';
+import { formatDateShort } from '@/services/financeiroLocal';
 
 const FUEL_TONE: Record<string, 'teal' | 'amber' | 'blue' | 'gray'> = {
   Diesel: 'teal',
@@ -22,16 +23,16 @@ export default function AbastecimentoPage() {
     fuelStats,
     trips,
     liveMode,
-    setShowFuelModal,
     startEditFuel,
     handleDeleteFuel,
   } = useEstoquePneus();
 
   // Filtro por mês (AAAA-MM). Vazio = todos os períodos.
   const [month, setMonth] = useState('');
+  const [plateQuery, setPlateQuery] = useState('');
   const monthRows = useMemo(
-    () => (month ? fuelRows.filter((f) => String(f.data).slice(0, 7) === month) : fuelRows),
-    [fuelRows, month]
+    () => fuelRows.filter(f => (!month || String(f.data).slice(0, 7) === month) && (!plateQuery || (vehicles.find(v => v.id === f.veiculoId)?.placa || '').toLocaleLowerCase('pt-BR').includes(plateQuery.toLocaleLowerCase('pt-BR')))),
+    [fuelRows, month, plateQuery, vehicles]
   );
   const period = useMemo(() => {
     const litros = monthRows.reduce((a, f) => a + (Number(f.litros) || 0), 0);
@@ -53,50 +54,61 @@ export default function AbastecimentoPage() {
     };
   }, [monthRows, fuelMedias, fuelKmDiffs]);
   const ultimoVeh = period.ultimo ? vehicles.find((v) => v.id === period.ultimo!.veiculoId) : undefined;
+  const anomalies = useMemo(() => vehicles.flatMap(vehicle => {
+    const readings = fuelings.filter(f => f.veiculoId === vehicle.id && f.tipo !== 'Arla' && !!fuelMedias[f.id]).sort((a,b) => a.data.localeCompare(b.data) || a.km - b.km);
+    if (readings.length < 3) return [];
+    const recent = readings[readings.length - 1];
+    const older = readings.slice(0,-1);
+    const previousLiters = older.reduce((sum,f) => sum + fuelMedias[f.id].litros, 0);
+    const baseline = previousLiters > 0 ? older.reduce((sum,f) => sum + fuelMedias[f.id].dist, 0) / previousLiters : 0;
+    const latest = fuelMedias[recent.id].media;
+    if (!baseline || !Number.isFinite(latest) || latest >= baseline * .8 || (month && !recent.data.startsWith(month))) return [];
+    return [{ vehicle, last: recent, latest, baseline, difference: Math.round((1-latest/baseline)*100) }];
+  }).sort((a,b) => b.difference-a.difference).slice(0,4), [vehicles, fuelings, fuelMedias, month]);
 
   return (
     <div className="space-y-5">
+      {anomalies.length > 0 && <section className="ef-fuel-alert card" aria-label="Variações de consumo para revisão"><div className="ef-fuel-alert-head"><AlertTriangle size={19}/><div><b>Consumos para conferir</b><p>As últimas médias ficaram abaixo do histórico de cada veículo. Verifique os lançamentos antes de tirar conclusões.</p></div></div><div className="ef-fuel-alert-list">{anomalies.map(item => <div className="ef-fuel-alert-row" key={item.vehicle.id}><Plate v={item.vehicle}/><span>Última média <b>{formatDec(item.latest)} km/l</b> · referência <b>{formatDec(item.baseline)} km/l</b></span><Chip tone="amber">{item.difference}% abaixo</Chip></div>)}</div></section>}
       <div className="ef-g-kpi">
         <Kpi
-          label="Média da frota"
-          value={fuelStats.frota || 0}
+          label={month || plateQuery ? 'Média no filtro' : 'Média da frota'}
+          value={month || plateQuery ? period.kmLitro || 0 : fuelStats.frota || 0}
           fmt={(n) => formatDec(n)}
           suffix="km/l"
           icon={Fuel}
           tone={{ bg: 'var(--teal-soft)', fg: 'var(--teal)' }}
-          sub={
+          sub={month || plateQuery ? 'Calculada nos registros selecionados' :
             fuelStats.frota
               ? `${fuelStats.porVeiculo.length} veículo(s) com média`
-              : 'Faltam abastecimentos para calcular'
-          }
+              : 'Faltam abastecimentos para calcular'}
           delay={0}
         />
         <Kpi
           label="Litros abastecidos"
-          value={fuelStats.litrosTotal}
+          value={period.litros}
           fmt={(n) => formatNumber(Math.round(n))}
           suffix="L"
           icon={Fuel}
           tone={{ bg: 'var(--soft)', fg: 'var(--ink)' }}
-          sub="Todos os combustíveis e Arla"
+          sub={month || plateQuery ? 'No período e placa filtrados' : 'Todos os combustíveis e Arla'}
           delay={70}
         />
         <Kpi
           label="Gasto com combustível"
-          value={fuelStats.gastoTotal}
+          value={period.gasto}
           fmt={formatCurrency}
           icon={DollarSign}
           tone={{ bg: 'var(--blue-soft)', fg: 'var(--blue-ink)' }}
-          sub="Soma dos valores totais"
+          sub={month || plateQuery ? 'No período e placa filtrados' : 'Soma dos valores totais'}
           delay={140}
         />
         <Kpi
           label="Lançamentos"
-          value={fuelings.length}
+          value={monthRows.length}
           suffix="registros"
           icon={FileWarning}
           tone={{ bg: 'var(--amber-soft)', fg: 'var(--amber-ink)' }}
-          sub="Média não considera Arla"
+          sub="Registros no filtro atual"
           delay={210}
         />
       </div>
@@ -104,12 +116,8 @@ export default function AbastecimentoPage() {
       <div className="card overflow-hidden ef-rise">
         <SectionHead
           title="Abastecimentos"
-          sub="Média (km/l) = (KM deste abastecimento − KM do anterior do mesmo veículo) ÷ litros · Média de Km = só a diferença de KM entre abastecimentos"
-        >
-          <Btn v="primary" icon={Plus} onClick={() => setShowFuelModal(true)}>
-            Lançar abastecimento
-          </Btn>
-        </SectionHead>
+          sub="Consulte registros, custos e eficiência de cada abastecimento."
+        />
         <div
           className="px-5 py-3 flex flex-wrap items-center gap-3"
           style={{ borderTop: '1px solid var(--line2)', borderBottom: '1px solid var(--line2)' }}
@@ -125,13 +133,14 @@ export default function AbastecimentoPage() {
               onChange={(e) => setMonth(e.target.value)}
             />
           </label>
-          {month && (
-            <Btn sm onClick={() => setMonth('')}>
-              Todos os meses
+          <label className="ef-list-search ef-fuel-plate-search"><Search size={16}/><span className="sr-only">Filtrar por placa</span><input placeholder="Filtrar por placa…" value={plateQuery} onChange={e => setPlateQuery(e.target.value)}/></label>
+          {(month || plateQuery) && (
+            <Btn sm onClick={() => { setMonth(''); setPlateQuery(''); }}>
+              Limpar filtros
             </Btn>
           )}
           <span className="ef-t12_5" style={{ color: 'var(--mute)' }}>
-            {month ? `${monthRows.length} de ${fuelRows.length} lançamentos` : `${fuelRows.length} lançamentos`}
+            {month || plateQuery ? `${monthRows.length} de ${fuelRows.length} lançamentos` : `${fuelRows.length} lançamentos`}
           </span>
           <div className="flex flex-wrap items-center gap-2 ml-auto">
             <Chip tone="gray">{formatNumber(Math.round(period.litros))} L</Chip>
@@ -166,7 +175,7 @@ export default function AbastecimentoPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="tbl">
+            <table className="tbl ef-desktop-fuel-table">
               <thead>
                 <tr>
                   <th>Data</th>
@@ -256,6 +265,11 @@ export default function AbastecimentoPage() {
             </table>
           </div>
         )}
+        {monthRows.length > 0 && <div className="ef-mobile-fuel-list">{monthRows.map(f => {
+          const veh = vehicles.find(v => v.id === f.veiculoId);
+          const med = fuelMedias[f.id];
+          return <article key={f.id} className="ef-mobile-fuel-card"><div className="ef-mobile-fuel-card-top"><span>{veh ? <Plate v={veh}/> : 'Veículo indisponível'}</span><time dateTime={f.data}>{formatDateShort(f.data)}</time></div><div className="ef-mobile-fuel-values"><div><small>Combustível</small><b>{f.tipo}</b></div><div><small>Volume</small><b>{formatDec(f.litros)} L</b></div><div><small>Valor</small><b>{formatCurrency(f.valorTotal)}</b></div><div><small>Consumo</small><b>{med ? `${formatDec(med.media)} km/l` : '—'}</b></div></div><div className="ef-mobile-fuel-footer"><span>{f.fornecedor}</span><Btn sm onClick={() => startEditFuel(f)}>Editar</Btn></div></article>;
+        })}</div>}
       </div>
     </div>
   );

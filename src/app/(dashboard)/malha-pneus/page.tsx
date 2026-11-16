@@ -5,12 +5,13 @@ import { Database, Download, Upload, Settings, CheckCircle2, Plus, Wrench } from
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { APP_VERSION, CATEGORIAS_MANUTENCAO, SCHEMA_VERSION, formatNumber } from '@/services/api';
 import { findTireRule, normMedida, normTxt } from '@/services/pneusService';
-import { Btn, Chip, Empty, Field, SectionHead } from '@/components/ui';
+import { Btn, Chip, Empty, Field, SectionHead, cx } from '@/components/ui';
 import { RegraManutencaoPreventiva, RegraModeloPneu } from '@/types/frotawise';
 import { httpClient } from '@/lib/http/client';
 import { normalizarViagens } from '@/services/viagensService';
 import { normalizarMultas } from '@/services/multasService';
 import { normalizarCustosFixos } from '@/services/custosFixosService';
+import { friendlyError } from '@/lib/errors';
 
 export default function MalhaPneusConfigPage() {
   const {
@@ -29,7 +30,7 @@ export default function MalhaPneusConfigPage() {
     preventiveList,
     showToast,
     handleExportBackup,
-    liveMode, runLiveMutation,
+    liveMode, runLiveMutation, pendingMutationCount,
   } = useEstoquePneus();
 
   const emptyRule = { marca: '', medida: '', km1: '', km2: '', km3: '', kmSucata: '' };
@@ -39,6 +40,7 @@ export default function MalhaPneusConfigPage() {
   const emptyMRule = { modelo: '', categoria: '', peca: '', km: '' };
   const [maintRuleForm, setMaintRuleForm] = useState(emptyMRule);
   const [editingMaintRuleId, setEditingMaintRuleId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const r = company.regrasPneus;
   const setRule = (k: 'kmEstocar' | 'kmRecapar' | 'kmSucatear', v: string) =>
@@ -47,7 +49,7 @@ export default function MalhaPneusConfigPage() {
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (liveMode) { showToast('Restauração JSON local desativada em modo API. Use a importação de planilha pelo servidor.', 'error'); return; }
+    if (liveMode) { showToast('Para importar informações, utilize uma planilha CSV ou XLSX.', 'warning'); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -73,14 +75,16 @@ export default function MalhaPneusConfigPage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (importing) return;
+    setImporting(true);
     try {
       const form = new FormData(); form.append('file', file);
       const result = await httpClient.post('/onboarding/importar-planilha', form, {headers: {'Content-Type': undefined}});
       showToast('Planilha importada: ' + JSON.stringify(result.data.importados));
       window.location.reload();
-    } catch (error: any) {
-      showToast(error?.response?.data?.detail || 'Importação rejeitada pelo servidor.', 'error');
-    }
+    } catch (error: unknown) {
+      showToast(friendlyError(error, 'Não foi possível importar a planilha.'), 'error');
+    } finally { setImporting(false); }
   };
   const handleDownloadTemplate = async () => {
     try {
@@ -91,7 +95,7 @@ export default function MalhaPneusConfigPage() {
     } catch {showToast('Não foi possível baixar o modelo.', 'error');}
   };
   const handleSaveCompany = () => {
-    void runLiveMutation('put', '/empresa/config', {
+    return runLiveMutation('put', '/empresa/config', {
       nomeEmpresa: company.nomeEmpresa, cnpj: company.cnpj, logoUrl: company.logoUrl,
       regrasPneus: {kmEstocar: company.regrasPneus.kmEstocar, kmRecapar: company.regrasPneus.kmRecapar,
         kmSucatear: company.regrasPneus.kmSucatear, msgEstocar: company.regrasPneus.msgEstocar,
@@ -120,7 +124,7 @@ export default function MalhaPneusConfigPage() {
       kmSucata: Number(ruleForm.kmSucata) || 0,
     };
     if (!marca) return;
-    if (liveMode && !ruleForm.medida.trim()) {showToast('Informe a medida do pneu. A API atual exige medida específica.', 'error'); return;}
+    if (liveMode && !ruleForm.medida.trim()) {showToast('Informe a medida específica do pneu.', 'warning'); return;}
     const preenchidos = [kms.km1, kms.km2, kms.km3, kms.kmSucata].filter((n) => n > 0);
     if (preenchidos.length === 0) {
       showToast('Informe ao menos uma quilometragem para a regra.', 'error');
@@ -186,7 +190,7 @@ export default function MalhaPneusConfigPage() {
   };
 
   const handleRemoveRule = (rg: RegraModeloPneu) => {
-    if (liveMode) {void runLiveMutation('delete', `/malha/${rg.id}`, undefined, 'Regra removida.'); return;}
+    if (liveMode) return runLiveMutation('delete', `/malha/${rg.id}`, undefined, 'Regra removida.');
     setCompany((prev) => ({
       ...prev,
       regrasModelos: (prev.regrasModelos || []).filter((x) => x.id !== rg.id),
@@ -227,7 +231,7 @@ export default function MalhaPneusConfigPage() {
       return;
     }
     if (liveMode) {
-      if (!item.modelo.trim()) {showToast('O backend exige um modelo específico para regra preventiva.', 'error'); return;}
+      if (!item.modelo.trim()) {showToast('Informe o modelo específico para a regra preventiva.', 'warning'); return;}
       void runLiveMutation(editingMaintRuleId ? 'put' : 'post',
         editingMaintRuleId ? `/preventivas/regras/${editingMaintRuleId}` : '/preventivas/regras',
         {modelo:item.modelo, categoria:item.categoria, peca:item.peca, km:item.km},
@@ -262,7 +266,7 @@ export default function MalhaPneusConfigPage() {
   };
 
   const handleRemoveMaintRule = (rg: RegraManutencaoPreventiva) => {
-    if (liveMode) {void runLiveMutation('delete', `/preventivas/regras/${rg.id}`, undefined, 'Regra preventiva removida.'); return;}
+    if (liveMode) return runLiveMutation('delete', `/preventivas/regras/${rg.id}`, undefined, 'Regra preventiva removida.');
     setCompany((prev) => ({
       ...prev,
       regrasManutencao: (prev.regrasManutencao || []).filter((x) => x.id !== rg.id),
@@ -276,8 +280,9 @@ export default function MalhaPneusConfigPage() {
 
   return (
     <div className="space-y-5">
+      <div className="ef-config-intro"><div><span className="ef-overline">ADMINISTRAÇÃO</span><h2>Configurações da empresa</h2><p>Identidade, parâmetros operacionais e cópias dos dados.</p></div><nav aria-label="Seções de configurações"><a href="#config-empresa">Empresa</a><a href="#config-pneus">Regras de pneus</a><a href="#config-preventivas">Preventivas</a><a href="#config-backup">Backup e importação</a></nav></div>
       <div className="ef-g-2">
-        <div className="card p-6 space-y-5 ef-rise">
+        <div id="config-backup" className="card p-6 space-y-5 ef-rise ef-scroll-anchor">
           <div className="flex items-center gap-3">
             <div
               className="w-11 h-11 rounded-xl flex items-center justify-center"
@@ -288,7 +293,7 @@ export default function MalhaPneusConfigPage() {
             <div>
               <h3 className="ef-t16 font-semibold">Backup e restauração</h3>
               <p className="ef-t12_5" style={{ color: 'var(--mute)' }}>
-                {liveMode ? 'Exporte seus dados do Supabase ou importe uma planilha CSV/XLSX. Isso não substitui o backup do banco.' : 'Salve ou restaure todos os dados ao trocar de computador, via Pen Drive.'}
+                {liveMode ? 'Baixe uma cópia das informações ou importe uma planilha CSV/XLSX. Guarde também cópias de segurança regulares.' : 'Salve ou restaure seus dados por meio de um arquivo. Guarde-o em local seguro.'}
               </p>
             </div>
           </div>
@@ -298,9 +303,9 @@ export default function MalhaPneusConfigPage() {
           {liveMode ? (
             <>
               <Btn onClick={handleDownloadTemplate}>Baixar modelo de planilha</Btn>
-              <label className="btn btn-primary w-full ef-py3 cursor-pointer">
-                <Upload size={16}/> Importar CSV/XLSX no Supabase (ADMIN)
-                <input type="file" accept=".xlsx,.csv" onChange={handleImportSpreadsheet} className="hidden" />
+              <label className={cx('btn btn-primary w-full ef-py3 cursor-pointer', importing && 'opacity-60 pointer-events-none')} aria-busy={importing}>
+                <Upload size={16}/> {importing ? 'Importando planilha…' : 'Importar planilha CSV/XLSX'}
+                <input type="file" accept=".xlsx,.csv" onChange={handleImportSpreadsheet} className="hidden" disabled={importing} />
               </label>
             </>
           ) : (
@@ -315,7 +320,7 @@ export default function MalhaPneusConfigPage() {
           </div>
         </div>
 
-        <div className="card p-6 space-y-4 ef-rise" style={{ animationDelay: '70ms' }}>
+        <div id="config-empresa" className="card p-6 space-y-4 ef-rise ef-scroll-anchor" style={{ animationDelay: '70ms' }}>
           <div className="flex items-center gap-3">
             <div
               className="w-11 h-11 rounded-xl flex items-center justify-center"
@@ -390,11 +395,11 @@ export default function MalhaPneusConfigPage() {
               />
             </Field>
           </div>
-          {liveMode && <Btn v="primary" onClick={handleSaveCompany}>Salvar empresa e limites no Supabase</Btn>}
+          {liveMode && <Btn v="primary" onClick={handleSaveCompany} loadingLabel="Salvando…">Salvar empresa e limites</Btn>}
         </div>
       </div>
 
-      <div className="card ef-rise" style={{ animationDelay: '140ms' }}>
+      <div id="config-pneus" className="card ef-rise ef-scroll-anchor" style={{ animationDelay: '140ms' }}>
         <SectionHead
           title="Regras de pneus por modelo (Malha de Pneus)"
           sub="Defina a quilometragem de cada aviso do painel por modelo/marca e tamanho. Pneus sem regra usam os limites gerais acima."
@@ -472,7 +477,7 @@ export default function MalhaPneusConfigPage() {
                   Cancelar edição
                 </Btn>
               )}
-              <Btn type="submit" v="primary" icon={editingRuleId ? CheckCircle2 : Plus}>
+              <Btn type="submit" v="primary" loading={pendingMutationCount > 0} icon={editingRuleId ? CheckCircle2 : Plus}>
                 {editingRuleId ? 'Salvar alterações' : 'Adicionar regra'}
               </Btn>
             </div>
@@ -536,7 +541,7 @@ export default function MalhaPneusConfigPage() {
         )}
       </div>
 
-      <div className="card ef-rise" style={{ animationDelay: '200ms' }}>
+      <div id="config-preventivas" className="card ef-rise ef-scroll-anchor" style={{ animationDelay: '200ms' }}>
         <SectionHead
           title="Manutenção preventiva por categoria"
           sub="Defina de quantos em quantos KM cada serviço precisa de manutenção preventiva. Os avisos aparecem na Visão geral."
@@ -626,7 +631,7 @@ export default function MalhaPneusConfigPage() {
                   Cancelar edição
                 </Btn>
               )}
-              <Btn type="submit" v="primary" icon={editingMaintRuleId ? CheckCircle2 : Plus}>
+              <Btn type="submit" v="primary" loading={pendingMutationCount > 0} icon={editingMaintRuleId ? CheckCircle2 : Plus}>
                 {editingMaintRuleId ? 'Salvar alterações' : 'Adicionar limite'}
               </Btn>
             </div>

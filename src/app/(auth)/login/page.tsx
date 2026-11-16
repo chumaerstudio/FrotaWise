@@ -76,8 +76,8 @@ export default function LoginPage() {
               {erro}
             </p>
           )}
-          <Btn type="submit" v="primary" className="w-full ef-py3" disabled={enviando}>
-            {enviando ? 'Entrando…' : 'Entrar no Painel FrotaWise'}
+          <Btn type="submit" v="primary" className="w-full ef-py3" loading={enviando} loadingLabel="Entrando…">
+            Entrar no Painel FrotaWise
           </Btn>
         </form>
       </div>

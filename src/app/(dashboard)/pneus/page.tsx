@@ -3,21 +3,25 @@
 import React, { useState } from 'react';
 import {
   ArrowRightLeft,
+  Gauge,
   Package,
   Disc,
-  Plus,
   Search,
   Truck,
   History,
+  ZoomIn,
+  ZoomOut,
+  MapPin,
+  Trash2,
 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatNumber } from '@/services/api';
 import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
 import { getClassificacaoTone } from '@/services/statusTones';
 import { getVehicleChassisSlots } from '@/services/veiculosService';
-import { Btn, Chip, Empty, Field, SectionHead, TireChip, cx } from '@/components/ui';
+import { Btn, Chip, Empty, Field, Modal, SectionHead, TireChip, cx } from '@/components/ui';
+import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 import { ChassisView } from '@/components/chassis/ChassisView';
-import { TipoOperacaoPneu } from '@/types/frotawise';
 
 export default function PneusHubPage() {
   const {
@@ -33,16 +37,17 @@ export default function PneusHubPage() {
     setDraggedTireId,
     openTireOperationModal,
     setHistoryModalTire,
-    setShowTireModal,
     startEditTire,
     handleDeleteTire,
-    showToast,
   } = useEstoquePneus();
 
   const [tireHubSubTab, setTireHubSubTab] = useState<'chassis' | 'stock' | 'all'>('chassis');
   const [chassisEquipSearch, setChassisEquipSearch] = useState('');
   const [chassisTireSearch, setChassisTireSearch] = useState('');
   const [chassisFilterBy, setChassisFilterBy] = useState<'fogo' | 'marca' | 'medida'>('fogo');
+  const [zoomed, setZoomed] = useState(false);
+  const [slotPickerOpen, setSlotPickerOpen] = useState(false);
+  const [selectedSlotCode, setSelectedSlotCode] = useState('');
 
   const activeVehicle =
     vehicles.find((v) => v.id === selectedChassisVehicleId) || vehicles[0];
@@ -60,6 +65,14 @@ export default function PneusHubPage() {
   });
 
   const sel = tires.find((t) => t.id === selectedTireForActionId) || null;
+  const freeSlots = layout ? [
+    ...layout.axles.flatMap(axle => [...axle.leftSlots, ...axle.rightSlots]),
+    layout.spareSlot,
+  ].filter(slot => !mounted.some(t => t.posicaoAtual === slot.code)) : [];
+  const openSlotPicker = () => {
+    setSelectedSlotCode(freeSlots[0]?.code || '');
+    setSlotPickerOpen(true);
+  };
   const armed = !!sel || !!draggedTireId;
   const dropTire = () => (draggedTireId ? tires.find((t) => t.id === draggedTireId) : null);
 
@@ -82,10 +95,12 @@ export default function PneusHubPage() {
       );
     }
     return (
-      <div
+      <button
+        type="button"
         key={slot.code}
         className={cx('slot', armed && 'slot-armed')}
-        title={`Posição vaga: ${slot.label}`}
+        title={`Posição vaga: ${slot.label}${sel ? '. Clique para montar o pneu selecionado.' : ''}`}
+        aria-label={`Posição vaga: ${slot.label}${sel ? '. Montar pneu selecionado.' : ''}`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={() => {
           const d = dropTire();
@@ -97,7 +112,7 @@ export default function PneusHubPage() {
         }}
       >
         <span className="mono">{slot.code}</span>
-      </div>
+      </button>
     );
   };
 
@@ -133,9 +148,7 @@ export default function PneusHubPage() {
             Todos os pneus ({tires.length})
           </button>
         </div>
-        <Btn v="primary" icon={Plus} onClick={() => setShowTireModal(true)}>
-          Novo pneu
-        </Btn>
+        <span className="ef-hub-caption">Selecione uma aba para explorar os pneus da frota.</span>
       </div>
 
       {tireHubSubTab === 'chassis' &&
@@ -222,95 +235,42 @@ export default function PneusHubPage() {
                     </Field>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {(['Sucatear', 'Estocar', 'Recapar'] as const).map((a) => (
-                    <button
-                      key={a}
-                      className={cx(
-                        'btn btn-sm',
-                        sel ? (a === 'Sucatear' ? 'btn-danger' : 'btn-dark') : 'btn-ghost'
-                      )}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        const d = dropTire();
-                        if (d) openTireOperationModal(d, a as TipoOperacaoPneu);
-                      }}
-                      onClick={() => {
-                        if (!sel) {
-                          showToast('Selecione ou arraste um pneu primeiro!', 'error');
-                          return;
-                        }
-                        openTireOperationModal(sel, a as TipoOperacaoPneu);
-                      }}
-                    >
-                      {a}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
-            <div
-              className="px-5 py-3 flex flex-wrap items-center justify-between gap-2 ef-t13"
-              style={{
-                background: 'var(--card2)',
-                borderBottom: '1px solid var(--line)',
-                color: 'var(--ink2)',
-              }}
-            >
-              <span>
-                Clique ou arraste um pneu para trocar de posição, <b>estocar</b>, <b>recapar</b> ou{' '}
-                <b>sucatear</b>.
-              </span>
-              {sel && (
-                <div className="flex items-center gap-2 ef-fade">
-                  <Chip tone="teal">
-                    Fogo #{sel.fogo} · {formatNumber(sel.kmTotal)} km
-                  </Chip>
-                  <Btn
-                    sm
-                    v="dark"
-                    icon={Plus}
-                    onClick={() => openTireOperationModal(sel, 'AddKm')}
-                  >
-                    Lançar KM
-                  </Btn>
+            {sel && (
+              <div className="ef-tire-active-bar" aria-live="polite">
+                <div className="min-w-0"><b>Pneu #{sel.fogo} selecionado</b><span>Clique em uma posição livre no chassi ou arraste o pneu até ela.</span></div>
+                <div className="ef-tire-active-actions">
+                  <Btn sm v="primary" icon={MapPin} disabled={!freeSlots.length} onClick={openSlotPicker}>Escolher posição</Btn>
+                  <RowActionsMenu label={`Outras ações do pneu ${sel.fogo}`} actions={[
+                    { label: 'Registrar KM', icon: Gauge, onClick: () => openTireOperationModal(sel, 'AddKm') },
+                    { label: 'Estocar', icon: Package, onClick: () => openTireOperationModal(sel, 'Estocar') },
+                    { label: 'Recapar', icon: Disc, onClick: () => openTireOperationModal(sel, 'Recapar') },
+                    { label: 'Sucatear', icon: Trash2, danger: true, onClick: () => openTireOperationModal(sel, 'Sucatear') },
+                  ]} />
+                  <button className="ef-tire-clear" onClick={() => setSelectedTireForActionId(null)} type="button">Limpar</button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className={cx('p-5 ef-g-chassis', layout.axles.length >= 3 && 'ef-g-chassis-wide')}>
-              <div className="py-2">
-                <ChassisView layout={layout} eixos={activeVehicle.eixos} renderSlot={renderSlot} />
+              <div className="py-2 ef-chassis-preview">
+                <div className="ef-chassis-preview-toolbar"><span>Chassi · {activeVehicle.placa}</span><Btn sm icon={zoomed ? ZoomOut : ZoomIn} onClick={() => setZoomed(value => !value)}>{zoomed ? 'Ajustar à tela' : 'Ampliar'}</Btn></div>
+                <ChassisView layout={layout} eixos={activeVehicle.eixos} renderSlot={renderSlot} zoomed={zoomed} />
               </div>
 
               <div className="ef-chassis-side">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold">Pneus em estoque</span>
-                  <Chip tone="gray">{unmounted.length}</Chip>
-                </div>
-                <p className="ef-t12_5 mb-3" style={{ color: 'var(--mute)' }}>
-                  Arraste para uma posição vaga do chassi.
-                </p>
-                <div className="flex flex-wrap ef-gap2_5 max-h-56 overflow-y-auto p-1">
-                  {unmounted.length === 0 && (
-                    <span className="ef-t13" style={{ color: 'var(--mute)' }}>
-                      Nenhum pneu encontrado.
-                    </span>
-                  )}
-                  {unmounted.map((t) => (
-                    <TireChip
-                      key={t.id}
-                      t={t}
-                      selected={selectedTireForActionId === t.id}
-                      onSelect={(id) => setSelectedTireForActionId((p) => (p === id ? null : id))}
-                      onDragStartTire={(id) => {
-                        setDraggedTireId(id);
-                        setSelectedTireForActionId(id);
-                      }}
-                      onDragEndTire={() => setDraggedTireId(null)}
-                    />
-                  ))}
+                <div className="ef-tire-stock-tray">
+                  <div className="ef-tire-stock-title"><div><b>Pneus disponíveis para montagem</b><p>Selecione um pneu e depois uma posição no chassi. Você também pode arrastar.</p></div><Chip tone="gray">{unmounted.length} disponíveis</Chip></div>
+                  <div className="ef-tire-stock-strip">
+                    {unmounted.length === 0 ? <span className="ef-t12" style={{ color: 'var(--mute)' }}>Nenhum pneu disponível com os filtros atuais.</span> : unmounted.map(t => (
+                      <TireChip key={t.id} t={t} selected={selectedTireForActionId === t.id}
+                        onSelect={id => setSelectedTireForActionId(previous => previous === id ? null : id)}
+                        onDragStartTire={id => { setDraggedTireId(id); setSelectedTireForActionId(id); }}
+                        onDragEndTire={() => setDraggedTireId(null)} />
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -355,6 +315,26 @@ export default function PneusHubPage() {
             </div>
           </div>
         ))}
+
+      {slotPickerOpen && sel && activeVehicle && (
+        <Modal title={`Montar pneu #${sel.fogo}`} onClose={() => setSlotPickerOpen(false)}>
+          <div className="space-y-4">
+            <p className="ef-t13" style={{ color: 'var(--ink2)' }}>Escolha a posição livre no veículo {activeVehicle.placa}. Você poderá conferir a operação antes de salvar.</p>
+            <Field label="Posição no chassi">
+              <select className="inp" value={selectedSlotCode} onChange={event => setSelectedSlotCode(event.target.value)}>
+                {freeSlots.map(slot => <option key={slot.code} value={slot.code}>{slot.label} ({slot.code})</option>)}
+              </select>
+            </Field>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Btn onClick={() => setSlotPickerOpen(false)}>Cancelar</Btn>
+              <Btn v="primary" disabled={!selectedSlotCode || !freeSlots.some(slot => slot.code === selectedSlotCode)}
+                onClick={() => { setSlotPickerOpen(false); openTireOperationModal(sel, 'Mount', activeVehicle.id, selectedSlotCode); }}>
+                Continuar montagem
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {tireHubSubTab === 'stock' && (
         <div className="card overflow-hidden ef-rise">

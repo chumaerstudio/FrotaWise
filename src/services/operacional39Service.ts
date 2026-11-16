@@ -3,16 +3,14 @@
  * same-origin: o JWT HttpOnly nunca deve ser exposto ao JavaScript do cliente.
  */
 import { httpClient } from '@/lib/http/client';
+import { friendlyError } from '@/lib/errors';
 import type { ContaPagar, CustoFixo, PagamentoPlano, Viagem } from '@/types/frotawise';
 
 export function api39Error(error: unknown): string {
   const e = error as { response?: { status?: number; data?: { detail?: unknown } }; message?: string };
   const detail = e?.response?.data?.detail;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) return detail.map((v) => typeof v?.msg === 'string' ? v.msg : 'Campo inválido').join('; ');
-  if (e?.response?.status === 401) return 'Sua sessão expirou. Entre novamente.';
-  if (e?.response?.status === 403) return 'Sem permissão para esta operação.';
-  return 'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.';
+  if (Array.isArray(detail)) return detail.map((v) => typeof v?.msg === 'string' && !/api|backend|postgres|supabase|token|sql/i.test(v.msg) ? v.msg : 'Verifique os dados informados.').join('; ');
+  return friendlyError(error, 'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.');
 }
 
 /** Decimal chega como texto para preservar precisão monetária no backend. */

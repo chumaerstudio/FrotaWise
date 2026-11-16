@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { X, Search, LucideIcon } from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Search, LoaderCircle, LucideIcon } from 'lucide-react';
+import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatNumber } from '@/services/api';
 import { getTireRecapStyle } from '@/services/pneusService';
 import { Pneu } from '@/types/frotawise';
@@ -12,21 +14,45 @@ interface BtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   v?: 'primary' | 'dark' | 'danger' | 'ghost' | 'soft';
   sm?: boolean;
   icon?: LucideIcon;
+  loading?: boolean;
+  loadingLabel?: string;
 }
 
 export const Btn: React.FC<BtnProps> = ({
   v = 'ghost',
   sm,
   icon: Icon,
+  loading = false,
+  loadingLabel,
   children,
   className,
+  onClick,
+  disabled,
   ...p
-}) => (
-  <button className={cx('btn', `btn-${v}`, sm && 'btn-sm', className)} {...p}>
-    {Icon && <Icon size={sm ? 14 : 16} />}
-    {children}
-  </button>
-);
+}) => {
+  const [autoLoading, setAutoLoading] = useState(false);
+  const pending = useRef(false);
+  const isLoading = loading || autoLoading;
+  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+    if (pending.current || loading) return;
+    const result = onClick?.(event) as unknown;
+    if (result && typeof (result as Promise<unknown>).then === 'function') {
+      pending.current = true;
+      setAutoLoading(true);
+      Promise.resolve(result).then(
+        () => { pending.current = false; setAutoLoading(false); },
+        () => { pending.current = false; setAutoLoading(false); }
+      );
+    }
+  };
+  return (
+    <button className={cx('btn', `btn-${v}`, sm && 'btn-sm', className)} {...p}
+      onClick={handleClick} disabled={disabled || isLoading} aria-busy={isLoading}>
+      {isLoading ? <LoaderCircle className="ef-spin shrink-0" size={sm ? 14 : 16} aria-hidden="true" /> : Icon && <Icon size={sm ? 14 : 16} />}
+      {isLoading ? (loadingLabel || (p.type === 'submit' ? 'Salvando…' : 'Processando…')) : children}
+    </button>
+  );
+};
 
 export const Chip: React.FC<{
   tone?: 'teal' | 'amber' | 'red' | 'blue' | 'gray';
@@ -75,29 +101,51 @@ export const Modal: React.FC<{
   children: React.ReactNode;
   wide?: boolean;
 }> = ({ title, onClose, children, wide }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const priorOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const raf = requestAnimationFrame(() => {
+      const first = dialogRef.current?.querySelector<HTMLElement>('[autofocus], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)');
+      first?.focus();
+    });
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); closeRef.current(); }
+      if (e.key !== 'Tab') return;
+      const focusables = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])') || []);
+      if (!focusables.length) { e.preventDefault(); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
+    return () => { cancelAnimationFrame(raf); document.body.style.overflow = priorOverflow; window.removeEventListener('keydown', h); previousFocus?.focus(); };
+  }, []);
 
-  return (
+  const overlay = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 ef-fade"
-      style={{ background: 'rgba(6,16,32,.55)', backdropFilter: 'blur(3px)' }}
+      className="ef-modal-overlay fixed inset-0 flex items-center justify-center p-3 sm:p-5 ef-fade"
+      style={{ background: 'rgba(6,16,32,.47)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className={cx('card ef-pop w-full overflow-y-auto', wide ? 'max-w-lg' : 'max-w-md')}
-        style={{ maxHeight: '92vh', boxShadow: '0 24px 60px rgba(6,16,32,.35)' }}
+        aria-labelledby={titleId}
+        className={cx('card ef-pop ef-modal-dialog w-full overflow-y-auto overscroll-contain', wide ? 'max-w-2xl' : 'max-w-xl')}
+        style={{ maxHeight: 'calc(100dvh - 32px)', boxShadow: '0 24px 60px rgba(6,16,32,.28)' }}
       >
         <div
-          className="flex items-center justify-between px-5 py-4"
+          className="ef-modal-heading sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4"
           style={{ borderBottom: '1px solid var(--line)' }}
         >
-          <h3 className="ef-t17 font-semibold">{title}</h3>
+          <h3 id={titleId} className="ef-t17 font-semibold">{title}</h3>
           <button aria-label="Fechar" onClick={onClose} className="icon-btn">
             <X size={18} />
           </button>
@@ -106,43 +154,83 @@ export const Modal: React.FC<{
       </div>
     </div>
   );
+  // As páginas usam animações com transform: um modal fixed dentro delas fica
+  // recortado pelo contêiner animado. O portal o coloca na raiz do dashboard,
+  // preservando as variáveis do tema e cobrindo a viewport inteira.
+  const root = typeof document !== 'undefined' ? document.querySelector('.ef-shell') : null;
+  return root ? createPortal(overlay, root) : overlay;
 };
 
 export const Drawer: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
   onClose,
   children,
 }) => {
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    drawerRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled)')?.focus();
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])') || []);
+      if (!focusable.length) { e.preventDefault(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
+  }, []);
 
-  return (
+  const overlay = (
     <div
-      className="fixed inset-0 z-40 ef-fade"
+      className="ef-drawer-overlay fixed inset-0 ef-fade"
       style={{ background: 'rgba(6,16,32,.45)' }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <aside role="dialog" aria-modal="true" className="ef-drawer">
+      <aside ref={drawerRef} role="dialog" aria-label="Detalhes" aria-modal="true" className="ef-drawer">
         {children}
       </aside>
     </div>
   );
+  const root = typeof document !== 'undefined' ? document.querySelector('.ef-shell') : null;
+  return root ? createPortal(overlay, root) : overlay;
 };
 
 export const FormActions: React.FC<{
   onCancel: () => void;
   label?: string;
   v?: 'primary' | 'dark' | 'danger' | 'ghost' | 'soft';
-}> = ({ onCancel, label = 'Salvar', v = 'dark' }) => (
-  <div className="flex justify-end gap-2 pt-3">
-    <Btn type="button" onClick={onCancel}>
-      Cancelar
-    </Btn>
-    <Btn type="submit" v={v}>
-      {label}
-    </Btn>
+  loading?: boolean;
+}> = ({ onCancel, label = 'Salvar', v = 'dark', loading }) => {
+  const { pendingMutationCount } = useEstoquePneus();
+  const pending = loading ?? pendingMutationCount > 0;
+  return (
+    <div className="flex flex-wrap justify-end gap-2 pt-3 ef-form-actions">
+      <Btn type="button" onClick={onCancel} disabled={pending}>Cancelar</Btn>
+      <Btn type="submit" v={v} loading={pending} loadingLabel={label.startsWith('Confirm') ? 'Confirmando…' : 'Salvando…'}>{label}</Btn>
+    </div>
+  );
+};
+
+export const PageSkeleton: React.FC<{ label?: string }> = ({ label = 'Carregando informações…' }) => (
+  <div role="status" aria-label={label} className="space-y-5" aria-busy="true">
+    <span className="sr-only">{label}</span>
+    <div className="ef-g-kpi">
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="card p-5 space-y-4">
+          <div className="ef-skeleton h-4 w-2/3" /><div className="ef-skeleton h-8 w-1/2" /><div className="ef-skeleton h-3 w-3/4" />
+        </div>
+      ))}
+    </div>
+    <div className="card p-5 space-y-4">
+      <div className="ef-skeleton h-5 w-44" />
+      {Array.from({ length: 5 }, (_, i) => <div key={i} className="ef-skeleton h-9 w-full" />)}
+    </div>
   </div>
 );
 
@@ -258,6 +346,8 @@ export const TireChip: React.FC<{
   const chassis = variant === 'chassis';
   return (
     <div
+      role="button"
+      aria-pressed={selected}
       tabIndex={0}
       draggable
       className={cx('tire', chassis && 'ctire', selected && 'tire-sel')}
@@ -265,7 +355,7 @@ export const TireChip: React.FC<{
       onDragStart={() => onDragStartTire(t.id)}
       onDragEnd={onDragEndTire}
       onClick={() => onSelect(t.id)}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(t.id)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(t.id); } }}
       title={`Fogo #${t.fogo} | ${t.marca} | ${st.label} | KM: ${formatNumber(t.kmTotal)}`}
     >
       {chassis ? (

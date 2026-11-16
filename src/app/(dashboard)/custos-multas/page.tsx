@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Wrench, FileWarning, Plus, Calendar } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Wrench, FileWarning, Plus, Calendar, Eye, Pencil, Trash2 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatCurrency, formatNumber } from '@/services/api';
 import { Btn, Chip, Empty, Modal, Plate, PlateFilter } from '@/components/ui';
@@ -12,18 +13,19 @@ import { idCompetencia, situacaoDoCusto, totalMensalVigente, vencimentoDaCompete
 import { localToday } from '@/services/financeiroLocal';
 import { costPayload } from '@/services/operacional39Service';
 import type { CustoFixo, Multa } from '@/types/frotawise';
+import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 
 export default function CustosMultasPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     vehicles,
     maintenances,
     fines,
     totalMaintenanceCost,
     totalFinesCost,
-    setShowMaintenanceModal,
     startEditMaint,
     handleDeleteMaintenance,
-    setShowFineModal,
     startEditFine,
     handleDeleteFine,
     custosFixos,
@@ -31,10 +33,13 @@ export default function CustosMultasPage() {
     pagamentos,
     setPagamentos,
     showToast,
+    setPendingConfirmation,
     liveMode, runLiveMutation,
   } = useEstoquePneus();
 
-  const [expenseSubTab, setExpenseSubTab] = useState<'maintenances' | 'fines' | 'fixed'>('maintenances');
+  const selectedTab = searchParams.get('aba');
+  const expenseSubTab: 'maintenances' | 'fines' | 'fixed' = selectedTab === 'fines' || selectedTab === 'fixed' ? selectedTab : 'maintenances';
+  const setExpenseSubTab = (tab: 'maintenances' | 'fines' | 'fixed') => router.push(`/custos-multas?aba=${tab}`, { scroll: false });
   const [fixedPlate, setFixedPlate] = useState('');
   const [fixedModal, setFixedModal] = useState<{ custo: CustoFixo | null } | null>(null);
   const [newCostKey, setNewCostKey] = useState('');
@@ -107,22 +112,17 @@ export default function CustosMultasPage() {
     );
   };
   const deleteFixed = (c: CustoFixo) => {
-    if (
-      !window.confirm(
-        liveMode
-          ? `Excluir o custo fixo "${c.descricao}" (${plateOf(c.veiculoId) || 'N/A'})? Custos com pagamentos registrados não podem ser excluídos; encerre sua vigência.`
-          : `Excluir o custo fixo "${c.descricao}" (${plateOf(c.veiculoId) || 'N/A'})?\n\nTodos os meses dele saem do Financeiro, inclusive os já pagos. Para manter o histórico, use Editar e informe o mês final ou desative o custo.`
-      )
-    )
-      return;
-    if (liveMode) {
-      // Pagamentos já baixados impedem exclusão no servidor, preservando auditoria.
-      void runLiveMutation('delete', `/custos-fixos/${c.id}`, undefined, 'Custo fixo excluído.');
-      return;
-    }
-    setCustosFixos((p) => p.filter((x) => x.id !== c.id));
-    setPagamentos((p) => p.filter((x) => !(x.origem === 'custoFixo' && x.origemId.startsWith(`${c.id}:`))));
-    showToast('Custo fixo excluído.');
+    setPendingConfirmation({
+      title: `Excluir custo fixo “${c.descricao}”?`,
+      description: liveMode ? `Veículo ${plateOf(c.veiculoId) || 'N/A'}. Custos com pagamentos registrados não podem ser excluídos; encerre a vigência para preservar o histórico.` : 'Todas as competências, inclusive pagas, sairão do Financeiro. Para manter o histórico, edite o mês final ou desative o custo.',
+      confirmLabel: 'Excluir custo fixo',
+      action: () => {
+        if (liveMode) return runLiveMutation('delete', `/custos-fixos/${c.id}`, undefined, 'Custo fixo excluído.');
+        setCustosFixos(p => p.filter(x => x.id !== c.id));
+        setPagamentos(p => p.filter(x => !(x.origem === 'custoFixo' && x.origemId.startsWith(`${c.id}:`))));
+        showToast('Custo fixo excluído.');
+      },
+    });
   };
 
   return (
@@ -131,39 +131,36 @@ export default function CustosMultasPage() {
         <div className="seg" role="tablist">
           <button
             role="tab"
+            aria-selected={expenseSubTab === 'maintenances'}
             className={expenseSubTab === 'maintenances' ? 'on' : ''}
             onClick={() => setExpenseSubTab('maintenances')}
           >
             <Wrench size={15} />
-            Manutenções ({maintenances.length}) · {formatCurrency(totalMaintenanceCost)}
+            Manutenções ({maintenances.length}) <span className="ef-tab-extra">· {formatCurrency(totalMaintenanceCost)}</span>
           </button>
           <button
             role="tab"
+            aria-selected={expenseSubTab === 'fines'}
             className={expenseSubTab === 'fines' ? 'on' : ''}
             onClick={() => setExpenseSubTab('fines')}
           >
             <FileWarning size={15} />
-            Multas ({fines.length}) · {formatCurrency(totalFinesCost)}
+            Multas ({fines.length}) <span className="ef-tab-extra">· {formatCurrency(totalFinesCost)}</span>
           </button>
           <button
             role="tab"
+            aria-selected={expenseSubTab === 'fixed'}
             className={expenseSubTab === 'fixed' ? 'on' : ''}
             onClick={() => setExpenseSubTab('fixed')}
           >
             <Calendar size={15} />
-            Custo Fixo por Veículo ({custosFixos.length}) · {formatCurrency(totalFixoMes)}/mês
+            Custos fixos ({custosFixos.length}) <span className="ef-tab-extra">· {formatCurrency(totalFixoMes)}/mês</span>
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Btn v="dark" icon={Plus} onClick={() => setShowMaintenanceModal(true)}>
-            Lançar manutenção
-          </Btn>
-          <Btn v="danger" icon={Plus} onClick={() => setShowFineModal(true)}>
-            Lançar multa / NIC
-          </Btn>
-          {(
+        <div className="flex items-center gap-2 ef-expense-actions">
+          {expenseSubTab === 'fixed' && (
             <Btn v="primary" icon={Plus} onClick={() => {setNewCostKey(crypto.randomUUID()); setFixedModal({ custo: null });}}>
-              Custo fixo
+              Cadastrar custo fixo
             </Btn>
           )}
         </div>
@@ -367,16 +364,15 @@ export default function CustosMultasPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="tbl">
+          <>
+          <div className="ef-desktop-fines">
+            <table className="tbl ef-fines-table ef-record-table">
               <thead>
                 <tr>
-                  <th>ID / AIT / data</th>
+                  <th>Multa / data</th>
                   <th>Veículo</th>
                   <th>Infração</th>
-                  <th>Motorista</th>
-                  <th className="ef-tc">Status</th>
-                  <th className="ef-tr">Valor</th>
+                  <th>Situação / valor</th>
                   <th className="ef-tr">Ações</th>
                 </tr>
               </thead>
@@ -384,68 +380,30 @@ export default function CustosMultasPage() {
                 {visibleFines.map((f) => {
                   const veh = vehicles.find((v) => v.id === f.veiculoId);
                   const nic = ehNic(f);
-                  const original = nic ? multaOriginalDaNic(fines, f) : undefined;
                   const nics = nic ? [] : nicsDaMulta(fines, f.id);
                   return (
                     <tr key={f.id}>
                       <td>
-                        <div className="mono font-bold whitespace-nowrap">{f.codigo || '—'}</div>
-                        <div className="mono ef-t12">{f.ait}</div>
-                        <div className="ef-t12" style={{ color: 'var(--mute)' }}>
-                          {f.data} · {f.pontos} pts
-                        </div>
+                        <button className="ef-entity-link mono whitespace-nowrap" type="button" onClick={() => setDetailFineId(f.id)}>{f.codigo || 'Multa'}</button>
+                        <div className="ef-record-secondary">{f.data} · {f.pontos} pts</div>
                       </td>
                       <td>{veh ? <Plate v={veh} /> : 'N/A'}</td>
-                      <td style={{ maxWidth: 320 }}>
-                        {nic && (
-                          <div className="mb-1 flex flex-wrap items-center gap-1">
-                            <Chip tone="red">NIC</Chip>
-                            <span className="ef-t12 mono" style={{ color: 'var(--mute)' }}>
-                              ↳ multa {original?.codigo || 'não localizada'}
-                            </span>
-                          </div>
-                        )}
-                        {f.motivo}
+                      <td>
+                        <span className="ef-record-description" title={f.motivo}>{nic && <Chip tone="red">NIC</Chip>} {f.motivo}</span>
                         {nics.length > 0 && (
-                          <div className="mt-1">
-                            <Chip tone="blue">
-                              {nics.length} NIC vinculada{nics.length > 1 ? 's' : ''}
-                            </Chip>
-                          </div>
+                          <div className="ef-record-secondary">{nics.length} NIC vinculada{nics.length > 1 ? 's' : ''}</div>
                         )}
                       </td>
                       <td>
-                        {f.identificado === false && !nic ? (
-                          <Chip tone="red">Não identificado (NIC)</Chip>
-                        ) : (
-                          f.motorista
-                        )}
-                      </td>
-                      <td className="text-center">
                         <Chip tone={getMultaStatusTone(f.status)}>{f.status}</Chip>
+                        <div className="ef-record-secondary mono" style={{ color: 'var(--red-ink)', fontWeight: 700 }}>{formatCurrency(f.valor)}</div>
                       </td>
-                      <td className="mono text-right font-bold" style={{ color: 'var(--red)' }}>
-                        {formatCurrency(f.valor)}
-                        {f.identificado === false && !nic && (
-                          <div
-                            className="ef-t11_5 font-normal"
-                            style={{ color: 'var(--mute)' }}
-                          >
-                            {formatCurrency(f.valorOriginal || 0)} + NIC{' '}
-                            {formatCurrency(f.valorNIC || 0)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-right whitespace-nowrap ef-sx15">
-                        <Btn sm onClick={() => setDetailFineId(f.id)}>
-                          Detalhes
-                        </Btn>
-                        <Btn sm onClick={() => startEditFine(f)}>
-                          Editar
-                        </Btn>
-                        <Btn sm className="ef-del" onClick={() => handleDeleteFine(f)}>
-                          Excluir
-                        </Btn>
+                      <td className="ef-tr">
+                        <RowActionsMenu label={`Ações da multa ${f.codigo || f.id}`} actions={[
+                          { label: 'Ver detalhes', icon: Eye, onClick: () => setDetailFineId(f.id) },
+                          { label: 'Editar multa', icon: Pencil, onClick: () => startEditFine(f) },
+                          { label: 'Excluir multa', icon: Trash2, danger: true, onClick: () => handleDeleteFine(f) },
+                        ]} />
                       </td>
                     </tr>
                   );
@@ -453,6 +411,24 @@ export default function CustosMultasPage() {
               </tbody>
             </table>
           </div>
+          <div className="ef-mobile-fines">
+            {visibleFines.map(f => {
+              const veh = vehicles.find(v => v.id === f.veiculoId);
+              const nic = ehNic(f);
+              return <article key={f.id} className="ef-mobile-fine-card">
+                <div className="ef-mobile-fine-head"><div className="min-w-0"><button type="button" className="ef-entity-link mono" onClick={() => setDetailFineId(f.id)}>{f.codigo || 'Multa'}</button><small>{f.data} · {f.pontos} pontos</small></div><Chip tone={getMultaStatusTone(f.status)}>{f.status}</Chip></div>
+                <div className="ef-mobile-fine-vehicle">{veh ? <Plate v={veh} /> : 'Veículo não encontrado'}<span className="mono ef-t11">{f.ait || 'Sem AIT'}</span></div>
+                <p className="ef-mobile-fine-reason">{nic && <Chip tone="red">NIC</Chip>} {f.motivo}</p>
+                <div className="ef-mobile-fine-bottom"><div><small>Valor da multa</small><b className="mono">{formatCurrency(f.valor)}</b></div><div><small>Motorista</small><b>{f.identificado === false && !nic ? 'Não identificado' : f.motorista || 'Não informado'}</b></div></div>
+                <div className="ef-mobile-fine-actions"><span className="ef-t12" style={{ color: 'var(--mute)' }}>Toque no código para ver detalhes</span><RowActionsMenu label={`Ações da multa ${f.codigo || f.id}`} actions={[
+                  { label: 'Ver detalhes', icon: Eye, onClick: () => setDetailFineId(f.id) },
+                  { label: 'Editar multa', icon: Pencil, onClick: () => startEditFine(f) },
+                  { label: 'Excluir multa', icon: Trash2, danger: true, onClick: () => handleDeleteFine(f) },
+                ]}/></div>
+              </article>;
+            })}
+          </div>
+          </>
         )}
       </div>
 
@@ -554,7 +530,7 @@ function FineDetailModal({
             {nics.length === 0 ? (
               <div className="ef-t13" style={{ color: 'var(--mute)' }}>
                 {liveMode
-                  ? 'O vínculo de NIC por ID ainda depende do backend (veja docs/HANDOFF_BACKEND.md).'
+                  ? 'Nenhuma NIC vinculada a esta multa até o momento.'
                   : 'Nenhuma NIC lançada para esta multa. Use “Lançar multa / NIC” e escolha NIC para vincular a este ID.'}
               </div>
             ) : (

@@ -1,39 +1,45 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import type { ToastTone } from '@/hooks/useFrotaWiseStore';
 
 export interface ToastProps {
-  variant?: 'success' | 'error' | 'warning' | 'info';
+  variant?: ToastTone;
   message: string;
   onClose?: () => void;
 }
 
 export function Toast({ variant = 'info', message, onClose }: ToastProps) {
-  const styles = {
-    success: 'border-emerald-500/40 bg-emerald-950/90 text-emerald-200',
-    error: 'border-red-500/40 bg-red-950/90 text-red-200',
-    warning: 'border-amber-500/40 bg-amber-950/90 text-amber-200',
-    info: 'border-blue-500/40 bg-slate-900/90 text-slate-100',
-  }[variant];
+  const Icon = { success: CheckCircle2, error: AlertCircle, warning: AlertTriangle, info: Info }[variant];
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLeaving(true), (variant === 'error' ? 7500 : 4800) - 220);
+    return () => clearTimeout(timer);
+  }, [variant, message]);
+  const close = () => {
+    if (leaving) return;
+    setLeaving(true);
+    setTimeout(() => onClose?.(), 200);
+  };
 
   return (
     <div
-      role="status"
-      aria-live="polite"
-      className={
-        'fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border px-4 py-3 text-xs shadow-lg ' +
-        styles
-      }
+      role={variant === 'error' ? 'alert' : 'status'}
+      aria-live={variant === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
+      className={`${leaving ? 'ef-toast-out' : 'ef-toast'} ef-notice ef-notice-${variant} fixed bottom-4 right-4 z-[70] flex items-start gap-3 rounded-xl border px-4 py-3 shadow-xl`}
     >
-      <span>{message}</span>
+      <Icon size={20} aria-hidden="true" className="shrink-0 mt-0.5" />
+      <span className="flex-1 text-sm leading-relaxed break-words">{message}</span>
       {onClose && (
         <button
           type="button"
-          onClick={onClose}
-          className="ml-2 font-bold opacity-75 hover:opacity-100"
+          onClick={close}
+          className="ef-notice-close shrink-0 rounded-lg p-1 -m-1"
           aria-label="Fechar aviso"
         >
-          ×
+          <X size={17} aria-hidden="true" />
         </button>
       )}
     </div>

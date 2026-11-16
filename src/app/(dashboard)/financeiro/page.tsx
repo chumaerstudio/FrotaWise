@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { httpClient } from '@/lib/http/client';
 import { accountPayload, api39Error, createAccount, planPayload, savePlan } from '@/services/operacional39Service';
 import {
@@ -12,6 +12,7 @@ import {
   Disc,
   DollarSign,
   Fuel,
+  Eye,
   Pencil,
   Plus,
   Trash2,
@@ -20,6 +21,8 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatCurrency, formatDec, formatNumber } from '@/services/api';
 import {
   addMonthsISO,
@@ -43,6 +46,7 @@ import {
   SectionHead,
 } from '@/components/ui';
 import type { ContaPagar, PagamentoPlano, TipoFinanceiro } from '@/types/frotawise';
+import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 
 const TONE: Record<TipoFinanceiro, 'teal' | 'blue' | 'red' | 'amber' | 'gray'> = {
   Abastecimento: 'teal',
@@ -80,6 +84,8 @@ const monthLabel = (ym: string) => {
 };
 
 export default function FinanceiroPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     vehicles,
     tires,
@@ -106,11 +112,30 @@ export default function FinanceiroPage() {
   const [contaForm, setContaForm] = useState(EMPTY_CONTA());
   const [contaCreateKey, setContaCreateKey] = useState('');
   const [savingConta, setSavingConta] = useState(false);
+  const [deletingConta, setDeletingConta] = useState<ContaPagar | null>(null);
+  const [confirmPayment, setConfirmPayment] = useState<ItemFinanceiro | null>(null);
+  const [detailPayment, setDetailPayment] = useState<ItemFinanceiro | null>(null);
+  const handledPayment = useRef('');
 
   const finItems = useMemo(
     () => buildPayables({ fuelings, maintenances, fines, tires, vehicles, pagamentos, contas, custosFixos }),
     [fuelings, maintenances, fines, tires, vehicles, pagamentos, contas, custosFixos]
   );
+
+  // A prioridade da tela inicial aponta para uma parcela exata, não só para a aba.
+  const paymentKey = searchParams.get('pagamento');
+  useEffect(() => {
+    if (!paymentKey || paymentKey === handledPayment.current) return;
+    const item = finItems.find(record => record.key === paymentKey && !record.pagoEm);
+    if (!item) return;
+    handledPayment.current = paymentKey;
+    setPeriodo('todos');
+    setConfirmPayment(item);
+  }, [paymentKey, finItems]);
+  const closePayment = () => {
+    setConfirmPayment(null);
+    if (paymentKey) router.replace('/financeiro', { scroll: false });
+  };
 
   const upsertPlan = (
     origem: PagamentoPlano['origem'],
@@ -148,8 +173,7 @@ export default function FinanceiroPage() {
         vencimento: plan?.vencimento || item.primeiroVenc,
         pagas: { ...(plan?.pagas || {}), [String(item.idx)]: localToday() },
       };
-      void runLiveMutation('put', '/financeiro/pagamentos', planPayload(next), 'Baixa confirmada no servidor.');
-      return;
+      return runLiveMutation('put', '/financeiro/pagamentos', planPayload(next), 'Pagamento confirmado.');
     }
     upsertPlan(item.origem, item.origemId, {
       pagas: { ...(plan?.pagas || {}), [item.idx]: localToday() },
@@ -174,11 +198,10 @@ export default function FinanceiroPage() {
     delete paid[String(item.idx)];
     if (liveMode && plan) {
       // O backend exige ADMIN para estorno/correção de uma parcela já paga.
-      void runLiveMutation('put', '/financeiro/pagamentos', planPayload({
+      return runLiveMutation('put', '/financeiro/pagamentos', planPayload({
         origem: plan.origem, origemId: plan.origemId, forma: plan.forma,
         parcelas: plan.parcelas, vencimento: plan.vencimento, pagas: paid,
-      }), 'Estorno confirmado no servidor.');
-      return;
+      }), 'Pagamento desfeito.');
     }
     upsertPlan(item.origem, item.origemId, { pagas: paid });
     if (item.origem === 'multa') {
@@ -277,7 +300,7 @@ export default function FinanceiroPage() {
         });
         planoConfirmado = true;
         await refreshLiveData();
-        showToast('Conta e plano salvos no servidor.');
+        showToast('Conta e plano de pagamento salvos com sucesso.');
         setContaAberta(false);
         setEditingContaId(null);
         setContaForm(EMPTY_CONTA());
@@ -315,10 +338,9 @@ export default function FinanceiroPage() {
 
   const deleteConta = (id: string) => {
     const conta = contas.find((c) => c.id === id);
-    if (!conta || !window.confirm(`Excluir a conta "${conta.descricao}" (${formatCurrency(conta.valor)})? Todas as parcelas serão removidas.`)) return;
+    if (!conta) return;
     if (liveMode) {
-      void runLiveMutation('delete', `/financeiro/contas/${id}`, undefined, 'Conta excluída no servidor.');
-      return;
+      return runLiveMutation('delete', `/financeiro/contas/${id}`, undefined, 'Conta excluída.');
     }
     setContas((prev) => prev.filter((c) => c.id !== id));
     setPagamentos((prev) => prev.filter((p) => !(p.origem === 'conta' && p.origemId === id)));
@@ -340,7 +362,7 @@ export default function FinanceiroPage() {
         origem: payEdit.origem, origemId: payEdit.origemId,
         forma: parcelado ? 'parcelado' : 'avista', parcelas, vencimento: payForm.vencimento,
         pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
-      }), 'Plano atualizado no servidor.').then((ok) => { if (ok) setPayEdit(null); });
+      }), 'Plano atualizado.').then((ok) => { if (ok) setPayEdit(null); });
       return;
     }
     upsertPlan(payEdit.origem, payEdit.origemId, {
@@ -364,6 +386,8 @@ export default function FinanceiroPage() {
   const ordenar = (a: ItemFinanceiro, b: ItemFinanceiro) =>
     a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : a.tipo.localeCompare(b.tipo);
   const aVencer = itens.filter((item) => !item.pagoEm && item.vencimento >= hoje).sort(ordenar);
+  const proximosSeteDias = aVencer.filter(item => daysBetween(hoje, item.vencimento) <= 7);
+  const venceHoje = aVencer.filter(item => item.vencimento === hoje);
   const vencidos = itens.filter((item) => !item.pagoEm && item.vencimento < hoje).sort(ordenar);
   const pagos = itens.filter((item) => item.pagoEm).sort((a, b) =>
     (a.pagoEm as string) < (b.pagoEm as string) ? 1 : (a.pagoEm as string) > (b.pagoEm as string) ? -1 : b.valor - a.valor
@@ -389,30 +413,28 @@ export default function FinanceiroPage() {
     `${item.forma === 'parcelado' ? `Parcela ${item.numParcela}/${item.parcelas}` : 'À vista'}${item.sub ? ` · ${item.sub}` : ''}`;
 
   const actionsFor = (item: ItemFinanceiro, isPaid = false) => (
-    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-      {isPaid ? (
-        <Btn sm className="btn-pill btn-oblue" icon={Undo2} onClick={() => undoPayItem(item)}>Desfazer</Btn>
-      ) : (
-        <>
-          <Btn sm v="primary" className="btn-pill" onClick={() => payItem(item)}>Dar baixa</Btn>
-          <Btn sm className="btn-pill btn-oblue" icon={Pencil} title="Editar pagamento" aria-label="Editar pagamento" onClick={() => openPayEdit(item)} />
-          {item.origem === 'conta' && <Btn sm className="btn-pill ef-del" icon={Trash2} title="Excluir conta" aria-label="Excluir conta" onClick={() => deleteConta(item.origemId)} />}
-        </>
-      )}
+    <div className="ef-fin-actions flex items-center justify-end gap-2 whitespace-nowrap">
+      {isPaid ? <Chip tone="teal">Pago</Chip> : <Btn sm v="primary" className="btn-pill" onClick={() => setConfirmPayment(item)}>Marcar como pago</Btn>}
+      <RowActionsMenu label={`Ações do pagamento ${item.descricao}`} actions={[
+        { label: 'Ver detalhes', icon: Eye, onClick: () => setDetailPayment(item) },
+        ...(!isPaid ? [{ label: 'Editar pagamento', icon: Pencil, onClick: () => openPayEdit(item) }] : []),
+        ...(isPaid ? [{ label: 'Desfazer pagamento', icon: Undo2, onClick: () => undoPayItem(item) }] : []),
+        ...(!isPaid && item.origem === 'conta' ? [{ label: 'Excluir conta', icon: Trash2, danger: true, onClick: () => setDeletingConta(contas.find(c => c.id === item.origemId) || null) }] : []),
+      ]} />
     </div>
   );
 
   return (
-    <div className="space-y-5">
+    <div className="ef-financeiro space-y-5">
       <div className="ef-fin-top">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span className="ef-tile" style={{ background: 'linear-gradient(135deg,#0B2342,#1F5AA6)' }}><Wallet size={21} /></span>
-          <div>
-            <div className="disp" style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.2 }}>Acompanhe seus pagamentos</div>
-            <div style={{ fontSize: 13, color: 'var(--mute)' }}>Contas a pagar, vencimentos e baixas em um só lugar</div>
+          <div className="min-w-0">
+            <h2 className="disp" style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.2 }}>Acompanhe seus pagamentos</h2>
+            <p className="ef-t13 mt-1" style={{ color: 'var(--mute)' }}>Contas a pagar, vencimentos e baixas em um só lugar</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="ef-fin-controls flex items-center gap-3 flex-wrap">
           <label className="ef-period">
             <Calendar size={16} />
             <select aria-label="Período" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
@@ -424,21 +446,27 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="ef-g-kpi">
+      <div className="ef-fin-priorities" aria-label="Prioridades de pagamento">
+        <button type="button" className="ef-fin-priority ef-fin-priority-red" onClick={() => { setAbaAvisos('vencidos'); document.getElementById('financeiro-avisos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><span>Vencidos</span><strong>{vencidos.length} parcela{vencidos.length !== 1 ? 's' : ''}</strong><small>{formatCurrency(soma(vencidos))}</small></button>
+        <button type="button" className="ef-fin-priority ef-fin-priority-amber" onClick={() => document.getElementById('financeiro-a-vencer')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><span>Vencem hoje</span><strong>{venceHoje.length} parcela{venceHoje.length !== 1 ? 's' : ''}</strong><small>{formatCurrency(soma(venceHoje))}</small></button>
+        <button type="button" className="ef-fin-priority" onClick={() => document.getElementById('financeiro-a-vencer')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><span>Próximos 7 dias</span><strong>{proximosSeteDias.length} parcela{proximosSeteDias.length !== 1 ? 's' : ''}</strong><small>{formatCurrency(soma(proximosSeteDias))}</small></button>
+      </div>
+
+      <div className="ef-g-kpi ef-fin-kpis">
         <Kpi label="Total a pagar" value={soma(aVencer) + soma(vencidos)} fmt={formatCurrency} icon={DollarSign} tone={{ bg: 'var(--blue-soft)', fg: 'var(--blue-ink)' }} sub="A vencer + vencido" delay={0} />
         <Kpi label="Total pago" value={soma(pagos)} fmt={formatCurrency} icon={CheckCircle2} tone={{ bg: 'var(--teal-soft)', fg: 'var(--teal-ink)' }} sub="Baixas registradas" delay={70} />
         <Kpi label="Total vencido" value={soma(vencidos)} fmt={formatCurrency} icon={AlertTriangle} tone={{ bg: 'var(--red-soft)', fg: 'var(--red-ink)' }} sub={`${vencidos.length} parcela(s) em atraso`} delay={140} />
         <Kpi label="Lançamentos" value={itens.length} fmt={(n) => formatNumber(Math.round(n))} icon={Calendar} tone={{ bg: 'var(--soft)', fg: 'var(--ink)' }} sub="Parcelas no período" delay={210} />
       </div>
 
-      <div className="card overflow-hidden ef-rise">
+      <div id="financeiro-a-vencer" className="card overflow-hidden ef-rise ef-fin-card ef-scroll-anchor">
         <SectionHead title="Pagamentos a vencer" sub="Inclui abastecimentos, manutenções e multas integradas, reformas de pneus e contas avulsas.">
           <Chip tone="teal">{aVencer.length} pagamento(s) · {formatCurrency(soma(aVencer))}</Chip>
         </SectionHead>
         {aVencer.length === 0 ? (
           <Empty icon={CheckCircle2} title="Nenhum pagamento a vencer" text="Os lançamentos integrados aparecem aqui. Use o botão acima para incluir uma conta avulsa." />
         ) : (
-          <div className="overflow-x-auto" style={{ padding: '10px 10px 12px' }}>
+          <div className="ef-fin-table-scroll overflow-x-auto" style={{ padding: '10px 10px 12px' }}>
             <table className="tbl ef-pillhead">
               <thead><tr><th>Tipo</th><th>Descrição</th><th className="ef-tr">Valor</th><th>Vencimento</th><th>Forma</th><th className="ef-tc">Parcelas</th><th className="ef-tr">Ações</th></tr></thead>
               <tbody>
@@ -449,8 +477,8 @@ export default function FinanceiroPage() {
                     <tr key={item.key} style={item.vencimento === hoje ? { background: 'rgba(242,176,30,.12)' } : undefined}>
                       <td><span className="flex items-center gap-2"><span className="ef-ticon" style={{ background: 'var(--soft)', color: 'var(--ink2)', width: 34, height: 34, borderRadius: 10 }}><Icon size={17} /></span><span className="font-semibold">{item.tipo}</span></span></td>
                       <td style={{ minWidth: 190, maxWidth: 340 }}><div className="font-semibold">{item.descricao}</div>{item.sub && <div className="ef-t12" style={{ color: 'var(--blue-ink)' }}>{item.sub}</div>}</td>
-                      <td className="mono text-right font-bold">{formatCurrency(item.valor)}{item.forma === 'parcelado' && <div className="ef-t11_5 font-normal" style={{ color: 'var(--mute)' }}>Total {formatCurrency(item.total)}</div>}</td>
-                      <td className="mono">{formatDateBR(item.vencimento)}<div className="ef-sans ef-t11_5" style={{ color: item.vencimento === hoje ? 'var(--amber-ink)' : 'var(--mute)' }}>{dias === 0 ? 'Hoje' : dias === 1 ? 'Amanhã' : `em ${dias} dias`}</div></td>
+                      <td className="mono ef-fin-amount text-right font-bold">{formatCurrency(item.valor)}{item.forma === 'parcelado' && <div className="ef-t11_5 font-normal" style={{ color: 'var(--mute)' }}>Total {formatCurrency(item.total)}</div>}</td>
+                      <td className="mono">{formatDateBR(item.vencimento)}<div className={`ef-sans ef-t11_5 ef-fin-deadline ${dias === 0 ? 'ef-fin-deadline-today' : ''}`}>{dias === 0 ? 'Hoje' : dias === 1 ? 'Amanhã' : `em ${dias} dias`}</div></td>
                       <td>{item.forma === 'parcelado' ? 'Parcelado' : 'À vista'}</td>
                       <td className="mono ef-tc">{item.forma === 'parcelado' ? `${item.numParcela} de ${item.parcelas}` : '—'}</td>
                       <td>{actionsFor(item)}</td>
@@ -464,7 +492,7 @@ export default function FinanceiroPage() {
       </div>
 
       <div className="ef-g-fin">
-        <div className="card overflow-hidden ef-rise">
+        <div className="card overflow-hidden ef-rise ef-fin-card">
           <div className="ef-band">
             <span className="ef-tile ef-tile-glass"><DollarSign size={21} /></span>
             <div className="min-w-0"><h3>Resumo por categoria</h3><p>Valores em R$ por situação do pagamento</p></div>
@@ -498,11 +526,11 @@ export default function FinanceiroPage() {
           </div>
         </div>
 
-        <div className="card overflow-hidden ef-rise">
+        <div id="financeiro-avisos" className="card overflow-hidden ef-rise ef-fin-card ef-scroll-anchor">
           <div className="ef-cardhead" style={{ borderBottom: 0 }}>
             <span className="ef-tile" style={{ background: 'linear-gradient(135deg,#1F5AA6,#3B82F6)' }}><Bell size={20} /></span>
             <div className="min-w-0 flex-1"><h3>Avisos de pagamento</h3><p>Vencidos e pagos, separados e ordenados por data</p></div>
-            <Btn className="btn-pill btn-oblue" onClick={() => setExpandirAvisos((prev) => !prev)}>{expandirAvisos ? 'Ver menos' : 'Ver todos'}<ChevronRight size={14} /></Btn>
+            <Btn className="btn-pill btn-oblue" aria-expanded={expandirAvisos} aria-controls="financeiro-avisos-lista" onClick={() => setExpandirAvisos((prev) => !prev)}>{expandirAvisos ? 'Ver menos' : 'Ver todos'}<ChevronRight size={14} /></Btn>
           </div>
           <div className="ef-seltiles">
             <button type="button" aria-pressed={abaAvisos === 'vencidos'} className={`ef-seltile ef-seltile-red ${abaAvisos === 'vencidos' ? 'on' : ''}`} onClick={() => setAbaAvisos('vencidos')}>
@@ -519,7 +547,7 @@ export default function FinanceiroPage() {
           {listaAvisos.length === 0 ? (
             <div className="px-5 py-4" style={{ color: 'var(--mute)' }}>{abaAvisos === 'vencidos' ? 'Nenhum pagamento vencido.' : 'Nenhum pagamento baixado ainda.'}</div>
           ) : (
-            <div className="ef-fin-wrap" style={{ margin: '8px 10px 12px', maxHeight: expandirAvisos ? 'none' : 262 }}>
+            <div id="financeiro-avisos-lista" className="ef-fin-wrap" style={{ margin: '8px 10px 12px', maxHeight: expandirAvisos ? 'none' : 262 }}>
               <table className="tbl ef-fin ef-pillhead">
                 <thead><tr><th>Descrição</th><th>{abaAvisos === 'vencidos' ? 'Vencimento' : 'Pago em'}</th><th className="ef-tr">Valor</th><th className="ef-tr">Ações</th></tr></thead>
                 <tbody>
@@ -544,6 +572,29 @@ export default function FinanceiroPage() {
           )}
         </div>
       </div>
+
+      <div className="ef-fin-management"><span>Custos mensais recorrentes por veículo também entram neste controle.</span><Btn sm onClick={() => router.push('/custos-multas?aba=fixed')}>Gerenciar custos fixos <ChevronRight size={14}/></Btn></div>
+
+      {detailPayment && (
+        <Modal title="Detalhes do pagamento" onClose={() => setDetailPayment(null)}>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2"><Chip tone={TONE[detailPayment.tipo]}>{detailPayment.tipo}</Chip><Chip tone={detailPayment.pagoEm ? 'teal' : detailPayment.vencimento < localToday() ? 'red' : 'amber'}>{detailPayment.pagoEm ? 'Pago' : detailPayment.vencimento < localToday() ? 'Vencido' : 'Pendente'}</Chip></div>
+            <h4 className="ef-t16 font-semibold">{detailPayment.descricao}</h4>
+            {detailPayment.sub && <p className="ef-t13" style={{ color: 'var(--mute)' }}>{detailPayment.sub}</p>}
+            <div className="ef-trip-details-grid">
+              <div><small>Valor desta parcela</small><b className="mono">{formatCurrency(detailPayment.valor)}</b></div>
+              <div><small>Valor total</small><b className="mono">{formatCurrency(detailPayment.total)}</b></div>
+              <div><small>Vencimento</small><b>{formatDateBR(detailPayment.vencimento)}</b></div>
+              <div><small>Forma de pagamento</small><b>{detailPayment.forma === 'parcelado' ? `Parcela ${detailPayment.numParcela} de ${detailPayment.parcelas}` : 'À vista'}</b></div>
+              {detailPayment.pagoEm && <div><small>Pago em</small><b>{formatDateBR(detailPayment.pagoEm)}</b></div>}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2"><Btn onClick={() => setDetailPayment(null)}>Fechar</Btn>{!detailPayment.pagoEm && <Btn v="primary" onClick={() => { setDetailPayment(null); setConfirmPayment(detailPayment); }}>Marcar como pago</Btn>}</div>
+          </div>
+        </Modal>
+      )}
+
+      {deletingConta && <ConfirmDialog title="Excluir conta a pagar?" description={`A conta “${deletingConta.descricao}”, de ${formatCurrency(deletingConta.valor)}, e todas as suas parcelas serão removidas. Se já houver pagamentos registrados, a exclusão poderá ser impedida.`} confirmLabel="Excluir conta" onCancel={() => setDeletingConta(null)} onConfirm={() => deleteConta(deletingConta.id)} />}
+      {confirmPayment && <ConfirmDialog title="Confirmar pagamento?" description={`Registrar ${formatCurrency(confirmPayment.valor)} como pago para “${confirmPayment.descricao}”? A data da baixa será a de hoje.`} variant="primary" confirmLabel="Confirmar pagamento" onCancel={closePayment} onConfirm={() => payItem(confirmPayment)} />}
 
       {payEdit && (
         <Modal title="Editar plano de pagamento" onClose={() => setPayEdit(null)} wide>
@@ -606,7 +657,7 @@ export default function FinanceiroPage() {
                 ))}
               </div>
             )}
-            <FormActions onCancel={() => { if (savingConta) return; setContaAberta(false); setEditingContaId(null); setContaForm(EMPTY_CONTA()); }} label={editingContaId ? 'Salvar alterações' : 'Salvar conta'} v="primary" />
+            <FormActions loading={savingConta} onCancel={() => { if (savingConta) return; setContaAberta(false); setEditingContaId(null); setContaForm(EMPTY_CONTA()); }} label={editingContaId ? 'Salvar alterações' : 'Salvar conta'} v="primary" />
           </fieldset></form>
         </Modal>
       )}

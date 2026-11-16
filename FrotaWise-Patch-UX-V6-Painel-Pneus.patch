@@ -1,0 +1,77 @@
+diff --git a/src/app/(dashboard)/pneus/page.tsx b/src/app/(dashboard)/pneus/page.tsx
+index 59a8404..7bcede7 100644
+--- a/src/app/(dashboard)/pneus/page.tsx
++++ b/src/app/(dashboard)/pneus/page.tsx
+@@ -12,6 +12,7 @@ import {
+   ZoomIn,
+   ZoomOut,
+   MapPin,
++  Trash2,
+ } from 'lucide-react';
+ import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
+ import { formatNumber } from '@/services/api';
+@@ -19,6 +20,7 @@ import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
+ import { getClassificacaoTone } from '@/services/statusTones';
+ import { getVehicleChassisSlots } from '@/services/veiculosService';
+ import { Btn, Chip, Empty, Field, Modal, SectionHead, TireChip, cx } from '@/components/ui';
++import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
+ import { ChassisView } from '@/components/chassis/ChassisView';
+ 
+ export default function PneusHubPage() {
+@@ -236,10 +238,21 @@ export default function PneusHubPage() {
+               </div>
+             </div>
+ 
+-            <div className="ef-tire-active-bar" aria-live="polite">
+-              <div className="min-w-0">{sel ? <><b>Pneu #{sel.fogo} selecionado</b><span>Toque em uma posição vazia no chassi ou escolha pela lista.</span></> : <><b>Selecione um pneu</b><span>Os pneus disponíveis ficam abaixo dos dados do pneu, ao lado do chassi.</span></>}</div>
+-              {sel && <div className="ef-tire-active-actions"><Btn sm v="primary" icon={MapPin} disabled={!freeSlots.length} onClick={openSlotPicker}>Escolher posição</Btn><button className="ef-tire-clear" onClick={() => setSelectedTireForActionId(null)} type="button">Limpar</button></div>}
+-            </div>
++            {sel && (
++              <div className="ef-tire-active-bar" aria-live="polite">
++                <div className="min-w-0"><b>Pneu #{sel.fogo} selecionado</b><span>Clique em uma posição livre no chassi ou arraste o pneu até ela.</span></div>
++                <div className="ef-tire-active-actions">
++                  <Btn sm v="primary" icon={MapPin} disabled={!freeSlots.length} onClick={openSlotPicker}>Escolher posição</Btn>
++                  <RowActionsMenu label={`Outras ações do pneu ${sel.fogo}`} actions={[
++                    { label: 'Registrar KM', icon: Gauge, onClick: () => openTireOperationModal(sel, 'AddKm') },
++                    { label: 'Estocar', icon: Package, onClick: () => openTireOperationModal(sel, 'Estocar') },
++                    { label: 'Recapar', icon: Disc, onClick: () => openTireOperationModal(sel, 'Recapar') },
++                    { label: 'Sucatear', icon: Trash2, danger: true, onClick: () => openTireOperationModal(sel, 'Sucatear') },
++                  ]} />
++                  <button className="ef-tire-clear" onClick={() => setSelectedTireForActionId(null)} type="button">Limpar</button>
++                </div>
++              </div>
++            )}
+ 
+             <div className={cx('p-5 ef-g-chassis', layout.axles.length >= 3 && 'ef-g-chassis-wide')}>
+               <div className="py-2 ef-chassis-preview">
+@@ -248,14 +261,6 @@ export default function PneusHubPage() {
+               </div>
+ 
+               <div className="ef-chassis-side">
+-                <div className="ef-tire-inspector" aria-live="polite">
+-                  {sel ? <>
+-                    <div className="ef-tire-inspector-title"><div><span className="ef-overline">PNEU SELECIONADO</span><h3>Fogo #{sel.fogo}</h3><p>{sel.marca} · {sel.medida}</p></div><button type="button" className="ef-tire-deselect" onClick={() => setSelectedTireForActionId(null)} aria-label="Desmarcar pneu">×</button></div>
+-                    <div className="ef-tire-facts"><span><small>Rodagem</small><b>{formatNumber(sel.kmTotal)} km</b></span><span><small>Sulco</small><b>{sel.sulcoMm} mm</b></span><span><small>Situação</small><b>{sel.veiculoAtualId ? sel.posicaoAtual : 'Em estoque'}</b></span></div>
+-                    <div className="ef-tire-action-list"><Btn v="primary" sm icon={Gauge} onClick={() => openTireOperationModal(sel, 'AddKm')}>Registrar KM</Btn><Btn sm onClick={() => openTireOperationModal(sel, 'Estocar')}>Estocar</Btn><Btn sm onClick={() => openTireOperationModal(sel, 'Recapar')}>Recapar</Btn><Btn sm className="ef-del" onClick={() => openTireOperationModal(sel, 'Sucatear')}>Sucatear</Btn></div>
+-                    <p className="ef-tire-tip">Para mover, toque na nova posição vazia no chassi ou arraste o pneu no computador.</p>
+-                  </> : <div className="ef-tire-no-selection"><Disc size={25}/><b>Nenhum pneu selecionado</b><span>Toque em um pneu para ver seus dados e movimentá-lo.</span></div>}
+-                </div>
+                 <div className="ef-tire-stock-tray">
+                   <div className="ef-tire-stock-title"><div><b>Pneus disponíveis para montagem</b><p>Selecione um pneu e depois uma posição no chassi. Você também pode arrastar.</p></div><Chip tone="gray">{unmounted.length} disponíveis</Chip></div>
+                   <div className="ef-tire-stock-strip">
+diff --git a/src/app/globals.css b/src/app/globals.css
+index c1af534..d4ec58b 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -760,9 +760,9 @@
+ .ef .ef-financeiro .ef-fin-actions .btn-primary{min-width:146px}
+ .ef .ef-financeiro .ef-fin-actions>.chip{margin-left:auto}
+ 
+-/* Pneus: estoque abaixo do inspetor lateral, instrução visível e zoom opcional. */
++/* Pneus: estoque na lateral do chassi, seleção compacta e zoom opcional. */
+ .ef .ef-tire-stock-tray{padding:16px 20px;border-bottom:1px solid var(--line);background:var(--card)}
+-.ef .ef-chassis-side .ef-tire-stock-tray{padding:16px 0 0;margin-top:16px;border-bottom:0;border-top:1px solid var(--line);background:transparent}
++.ef .ef-chassis-side .ef-tire-stock-tray{padding:0;border:0;background:transparent}
+ .ef .ef-tire-stock-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+ .ef .ef-tire-stock-title b{display:block;font-weight:700;font-size:13px}
+ .ef .ef-tire-stock-title p{margin-top:3px;color:var(--mute);font-size:11.5px}

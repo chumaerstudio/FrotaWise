@@ -119,3 +119,17 @@ export function normalizeApiError(error: unknown): FrotaWiseApiError {
     fieldErrors: data?.fieldErrors,
   });
 }
+
+/** Mensagens públicas: mantém validações úteis, sem mostrar infraestrutura ou respostas brutas. */
+export function friendlyError(error: unknown, fallback = 'Não foi possível concluir a operação. Tente novamente.'): string {
+  const apiError = normalizeApiError(error);
+  if (apiError.status === 401) return 'Sua sessão expirou. Entre novamente.';
+  if (apiError.status === 403) return 'Você não tem permissão para realizar esta ação.';
+  if (apiError.status === 429) return 'Muitas tentativas em pouco tempo. Aguarde e tente novamente.';
+  if (apiError.status === null || apiError.status >= 500) return 'Serviço temporariamente indisponível. Verifique sua conexão e tente novamente.';
+  const detail = apiError.detail;
+  if (!detail || /\b(supabase|render|fastapi|backend|postgres(?:ql)?|bff|http\s*\d{3}|traceback|stack|sql|api|endpoint|token|database)\b/i.test(detail)) {
+    return fallback;
+  }
+  return detail.length > 240 ? `${detail.slice(0, 237)}…` : detail;
+}
