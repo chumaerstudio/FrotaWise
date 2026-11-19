@@ -131,8 +131,30 @@ export default function PneusHubPage() {
       }
     }
     const date = today();
-    const sourceMove = registrarMovimentacao(source, { movId: `swap-${Date.now()}-a`, tipo: 'AddKm', data: date, kmFinal: kmSource, placa: activeVehicle.placa, modelo: activeVehicle.modelo, veiculoId: activeVehicle.id, kmVeiculo, obs: `Troca de posição ${sourcePos} → ${targetPos} com pneu #${target.fogo}` });
-    const targetMove = registrarMovimentacao(target, { movId: `swap-${Date.now()}-b`, tipo: 'AddKm', data: date, kmFinal: kmTarget, placa: activeVehicle.placa, modelo: activeVehicle.modelo, veiculoId: activeVehicle.id, kmVeiculo, obs: `Troca de posição ${targetPos} → ${sourcePos} com pneu #${source.fogo}` });
+
+    const sourceMove = registrarMovimentacao(source, {
+      movId: `swap-${Date.now()}-a`,
+      tipo: 'AddKm',
+      data: date,
+      kmFinal: kmSource,
+      placa: activeVehicle.placa,
+      modelo: activeVehicle.modelo,
+      veiculoId: activeVehicle.id,
+      kmVeiculo: kmVehicle,
+      obs: `Troca de posição ${sourcePos} → ${targetPos} com pneu #${target.fogo}`
+    });
+
+    const targetMove = registrarMovimentacao(target, {
+      movId: `swap-${Date.now()}-b`,
+      tipo: 'AddKm',
+      data: date,
+      kmFinal: kmTarget,
+      placa: activeVehicle.placa,
+      modelo: activeVehicle.modelo,
+      veiculoId: activeVehicle.id,
+      kmVeiculo: kmVehicle,
+      obs: `Troca de posição ${targetPos} → ${sourcePos} com pneu #${source.fogo}`
+    });
     if (sourceMove.erro || targetMove.erro) { showToast(sourceMove.erro || targetMove.erro || 'Não foi possível registrar a troca.', 'error'); return; }
     const nextTires = tires.map((t) => {
       if (t.id === source.id) return { ...sourceMove.tire, classificacao: 'Rodando' as const, veiculoAtualId: activeVehicle.id, posicaoAtual: targetPos, localEstoque: '' };
