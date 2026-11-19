@@ -346,9 +346,10 @@ export default function ViagensPage() {
               <div><small>KM final</small><b className="mono">{detailTrip.kmFinal === null ? 'Em andamento' : `${formatNumber(detailTrip.kmFinal)} km`}</b></div>
               <div><small>Percurso</small><b className="mono">{distanciaViagem(detailTrip) === null ? 'Aguardando conclusão' : `${formatNumber(distanciaViagem(detailTrip) || 0)} km`}</b></div>
               <div><small>Saldo registrado</small><b className="mono" style={{ color: totalItensViagem(detailTrip) - totalDespesasViagem(detailTrip) >= 0 ? 'var(--teal-ink)' : 'var(--red-ink)' }}>{formatCurrency(totalItensViagem(detailTrip) - totalDespesasViagem(detailTrip))}</b></div>
+              <div><small>Custo por KM rodado</small><b className="mono">{distanciaViagem(detailTrip) && distanciaViagem(detailTrip)! > 0 ? `${formatCurrency((totalItensViagem(detailTrip) - totalDespesasViagem(detailTrip)) / (distanciaViagem(detailTrip) as number))}/km` : '—'}</b></div>
             </div>
             <div className="ef-trip-details-list"><h4>Itens transportados · {formatCurrency(totalItensViagem(detailTrip))}</h4>
-              {detailTrip.itens?.length ? <ul>{detailTrip.itens.map(item => <li key={item.id}><span>{item.descricao}</span><b className="mono">{formatCurrency(item.valor)}</b></li>)}</ul> : <p className="ef-t12" style={{ color: 'var(--mute)' }}>Nenhum item informado.</p>}
+              {detailTrip.itens?.length ? <ul>{detailTrip.itens.map(item => <li key={item.id}><span>{item.descricao} <small style={{ color: 'var(--mute)' }}>· Qtd. {item.quantidade ?? 1}</small></span><b className="mono">{formatCurrency(item.valor)}</b></li>)}</ul> : <p className="ef-t12" style={{ color: 'var(--mute)' }}>Nenhum item informado.</p>}
             </div>
             <div className="ef-trip-details-list"><h4>Despesas · {formatCurrency(totalDespesasViagem(detailTrip))}</h4>
               {detailTrip.despesas?.length ? <ul>{detailTrip.despesas.map(item => <li key={item.id}><span>{item.descricao} · {item.data}</span><b className="mono">{formatCurrency(item.valor)}</b></li>)}</ul> : <p className="ef-t12" style={{ color: 'var(--mute)' }}>Nenhuma despesa vinculada.</p>}
@@ -443,15 +444,17 @@ export default function ViagensPage() {
               <div className="flex items-center justify-between">
                 <span className="lbl">Itens transportados e valores</span>
                 <Btn sm type="button" icon={Plus}
-                  onClick={() => setForm({ ...form, itens: [...form.itens, { id: `it-${Date.now()}`, descricao: '', valor: 0 }] })}>
+                  onClick={() => setForm({ ...form, itens: [...form.itens, { id: `it-${Date.now()}`, descricao: '', quantidade: 1, valor: 0 }] })}>
                   Item
                 </Btn>
               </div>
               {form.itens.map((it, i) => (
-                <div key={it.id} className="grid grid-cols-[1fr_140px_auto] gap-2 mt-2">
-                  <input className="inp" placeholder="Descrição do item" value={it.descricao}
+                <div key={it.id} className="grid grid-cols-[minmax(0,1fr)_90px_140px_auto] gap-2 mt-2">
+                  <input className="inp" placeholder="Descrição do produto transportado" value={it.descricao}
                     onChange={(e) => setForm({ ...form, itens: form.itens.map((x, j) => (j === i ? { ...x, descricao: e.target.value } : x)) })} />
-                  <input type="number" min="0" step="0.01" className="inp mono" placeholder="Valor (R$)" value={it.valor || ''}
+                  <input type="number" min="0.01" step="any" required className="inp mono" placeholder="Qtd." aria-label={`Quantidade do item ${i + 1}`} value={it.quantidade ?? 1}
+                    onChange={(e) => setForm({ ...form, itens: form.itens.map((x, j) => (j === i ? { ...x, quantidade: Number(e.target.value) } : x)) })} />
+                  <input type="number" min="0" step="0.01" className="inp mono" placeholder="Valor total (R$)" value={it.valor || ''}
                     onChange={(e) => setForm({ ...form, itens: form.itens.map((x, j) => (j === i ? { ...x, valor: Number(e.target.value) } : x)) })} />
                   <Btn sm type="button" className="ef-del" onClick={() => setForm({ ...form, itens: form.itens.filter((_, j) => j !== i) })}>×</Btn>
                 </div>

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Search, LoaderCircle, LucideIcon } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatNumber } from '@/services/api';
-import { getTireRecapStyle } from '@/services/pneusService';
+import { getTireKmStageStyle } from '@/services/pneusService';
 import { Pneu } from '@/types/frotawise';
 
 export const cx = (...a: (string | boolean | undefined | null)[]) => a.filter(Boolean).join(' ');
@@ -339,10 +339,13 @@ export const TireChip: React.FC<{
   onSelect: (id: string) => void;
   onDragStartTire: (id: string) => void;
   onDragEndTire: () => void;
+  onDropTire?: (draggedId: string, targetId: string) => void;
+  draggedTireId?: string | null;
   /** 'chassis' = pneu desenhado sobre a imagem do chassi (cor do status + banda). */
   variant?: 'chip' | 'chassis';
-}> = ({ t, selected, onSelect, onDragStartTire, onDragEndTire, variant = 'chip' }) => {
-  const st = getTireRecapStyle(t.recapagens);
+}> = ({ t, selected, onSelect, onDragStartTire, onDragEndTire, onDropTire, draggedTireId, variant = 'chip' }) => {
+  const { company } = useEstoquePneus();
+  const st = getTireKmStageStyle(t, company);
   const chassis = variant === 'chassis';
   return (
     <div
@@ -352,8 +355,10 @@ export const TireChip: React.FC<{
       draggable
       className={cx('tire', chassis && 'ctire', selected && 'tire-sel')}
       style={{ backgroundColor: st.c }}
-      onDragStart={() => onDragStartTire(t.id)}
+      onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', t.id); onDragStartTire(t.id); }}
       onDragEnd={onDragEndTire}
+      onDragOver={onDropTire ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } : undefined}
+      onDrop={onDropTire ? (event) => { event.preventDefault(); event.stopPropagation(); const sourceId = event.dataTransfer.getData('text/plain') || draggedTireId; if (sourceId && sourceId !== t.id) onDropTire(sourceId, t.id); } : undefined}
       onClick={() => onSelect(t.id)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(t.id); } }}
       title={`Fogo #${t.fogo} | ${t.marca} | ${st.label} | KM: ${formatNumber(t.kmTotal)}`}

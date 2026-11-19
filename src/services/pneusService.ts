@@ -124,6 +124,31 @@ export const findTireRule = (
         (b.medida ? 1000 : 0) + b.marca.length - ((a.medida ? 1000 : 0) + a.marca.length)
     )[0] || null;
 
+const TIRE_KM_STAGE_COLORS = ['#1C2524', '#715116', '#B77A04', '#E0560C', '#C8372D'];
+const TIRE_KM_STAGE_LABELS = ['Novo', '1º estágio', '2º estágio', '3º estágio', 'Último estágio'];
+
+/** Estágio visual derivado da quilometragem acumulada e das metas configuradas. */
+export function getTireKmStageStyle(
+  tire: Pick<Pneu, 'marca' | 'medida' | 'kmTotal'>,
+  company: EmpresaConfig
+) {
+  const rule = findTireRule(tire, company.regrasModelos);
+  const raw = rule
+    ? [rule.km1, rule.km2, rule.km3, rule.kmSucata]
+    : [
+        company.regrasPneus.kmEstocar,
+        company.regrasPneus.kmRecapar,
+        company.regrasPneus.kmRecapar + Math.max(1, (company.regrasPneus.kmSucatear - company.regrasPneus.kmRecapar) / 2),
+        company.regrasPneus.kmSucatear,
+      ];
+  const thresholds = raw.map(Number).filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+  const km = Math.max(0, Number(tire.kmTotal) || 0);
+  const stage = Math.min(4, thresholds.filter((limit) => km >= limit).length);
+  return { c: TIRE_KM_STAGE_COLORS[stage], label: TIRE_KM_STAGE_LABELS[stage], stage, nextLimit: thresholds[stage] ?? null, thresholds };
+}
+
+export const getTireKmStageLegend = () => TIRE_KM_STAGE_LABELS.map((label, stage) => ({ label, stage, c: TIRE_KM_STAGE_COLORS[stage] }));
+
 export const getTireLimits = (
   tire: Pick<Pneu, 'marca' | 'medida' | 'recapagens'>,
   company: EmpresaConfig

@@ -34,7 +34,7 @@ export function mapTrips(data: unknown): Viagem[] {
     data: String(t.data), origem: String(t.origem ?? ''), destino: String(t.destino ?? ''),
     kmInicial: Number(t.kmInicial), kmFinal: t.kmFinal == null ? null : Number(t.kmFinal),
     obs: String(t.obs ?? ''),
-    itens: records(t.itens).map((i) => ({ id: String(i.id), descricao: String(i.descricao), valor: asMoney(i.valor) })),
+    itens: records(t.itens).map((i) => ({ id: String(i.id), descricao: String(i.descricao), quantidade: Math.max(0, Number(i.quantidade ?? 1) || 1), valor: asMoney(i.valor) })),
     despesas: records(t.despesas).map((d) => ({
       id: String(d.id), descricao: String(d.descricao), valor: asMoney(d.valor),
       data: String(d.data), origem: (d.origem === 'abastecimento' ? 'abastecimento' : 'manual') as Viagem['despesas'][number]['origem'],
@@ -48,7 +48,7 @@ export function mapCosts(data: unknown): CustoFixo[] {
     id: String(c.id), veiculoId: String(c.veiculoId), categoria: c.categoria as CustoFixo['categoria'],
     descricao: String(c.descricao), valorMensal: asMoney(c.valorMensal),
     diaVencimento: Number(c.diaVencimento), inicio: String(c.inicio),
-    fim: c.fim == null ? null : String(c.fim), ativo: Boolean(c.ativo), obs: String(c.obs ?? ''),
+    fim: c.fim == null ? null : String(c.fim), ativo: Boolean(c.ativo), integrarFinanceiro: c.integrarFinanceiro !== false, formaPagamento: String(c.formaPagamento ?? 'Boleto'), obs: String(c.obs ?? ''),
   }));
 }
 
@@ -63,7 +63,7 @@ export function mapAccounts(data: unknown): ContaPagar[] {
 export function mapPlans(data: unknown): PagamentoPlano[] {
   return records(data).map((p) => ({
     id: String(p.id), origem: p.origem as PagamentoPlano['origem'], origemId: String(p.origemId),
-    forma: p.forma as PagamentoPlano['forma'], parcelas: Number(p.parcelas),
+    forma: p.forma as PagamentoPlano['forma'], meioPagamento: String(p.meioPagamento ?? 'Boleto'), parcelas: Number(p.parcelas),
     vencimento: String(p.vencimento), pagas: (p.pagas ?? {}) as Record<string, string>,
   }));
 }
@@ -73,7 +73,7 @@ export const tripPayload = (trip: Omit<Viagem, 'id'>) => ({
   origem: trip.origem ?? '', destino: trip.destino ?? '',
   kmInicial: trip.kmInicial, kmFinal: trip.kmFinal, obs: trip.obs ?? '',
   // IDs e valores derivados não são aceitos pelo contrato de escrita do servidor.
-  itens: trip.itens.map((i) => ({ descricao: i.descricao, valor: i.valor.toFixed(2) })),
+  itens: trip.itens.map((i) => ({ descricao: i.descricao, quantidade: Math.max(0, Number(i.quantidade ?? 1) || 1), valor: i.valor.toFixed(2) })),
   // Despesa de combustível é criada EXCLUSIVAMENTE pelo backend.
   despesas: trip.despesas.filter((d) => d.origem === 'manual').map((d) => ({
     descricao: d.descricao, data: d.data, valor: d.valor.toFixed(2), origem: 'manual',
@@ -83,7 +83,8 @@ export const tripPayload = (trip: Omit<Viagem, 'id'>) => ({
 export const costPayload = (cost: CustoFixo) => ({
   veiculoId: cost.veiculoId, categoria: cost.categoria, descricao: cost.descricao,
   valorMensal: cost.valorMensal.toFixed(2), diaVencimento: cost.diaVencimento,
-  inicio: cost.inicio, fim: cost.fim, ativo: cost.ativo, obs: cost.obs ?? '',
+  inicio: cost.inicio, fim: cost.fim, ativo: cost.ativo,
+  integrarFinanceiro: cost.integrarFinanceiro !== false, formaPagamento: cost.formaPagamento || 'Boleto', obs: cost.obs ?? '',
 });
 
 export const accountPayload = (account: Omit<ContaPagar, 'id'>) => ({
@@ -94,7 +95,7 @@ export const accountPayload = (account: Omit<ContaPagar, 'id'>) => ({
 
 export const planPayload = (plan: Omit<PagamentoPlano, 'id'>) => ({
   origem: plan.origem, origemId: plan.origemId, forma: plan.forma,
-  parcelas: plan.parcelas, vencimento: plan.vencimento, pagas: plan.pagas,
+  meioPagamento: plan.meioPagamento || 'Boleto', parcelas: plan.parcelas, vencimento: plan.vencimento, pagas: plan.pagas,
 });
 
 /** POST pode ser reenviado com a mesma chave após falha de rede sem duplicar. */

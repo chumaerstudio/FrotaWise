@@ -9,7 +9,7 @@ describe('Contrato API 3.9 / rotas integradas', () => {
     const trips = mapTrips([{
       id: 'trip-uuid', numero: 14, veiculoId: 'veh-uuid', data: '2026-11-13',
       kmInicial: 100, kmFinal: 200, origem: 'BH', destino: 'SP', obs: '',
-      itens: [{ id: 'item-uuid', descricao: 'Frete', valor: '310.45' }],
+      itens: [{ id: 'item-uuid', descricao: 'Frete', quantidade: 12, valor: '310.45' }],
       despesas: [
         { id: 'manual-uuid', descricao: 'Pedágio', valor: '22.10', data: '2026-11-13', origem: 'manual' },
         { id: 'fuel-uuid', descricao: 'Diesel', valor: '99.99', data: '2026-11-13', origem: 'abastecimento', abastecimentoId: 'ab-uuid' },
@@ -18,7 +18,7 @@ describe('Contrato API 3.9 / rotas integradas', () => {
     expect(trips[0].itens[0].valor).toBe(310.45);
     expect(trips[0].despesas[1].abastecimentoId).toBe('ab-uuid');
     const payload = tripPayload(trips[0]);
-    expect(payload.itens).toEqual([{ descricao: 'Frete', valor: '310.45' }]);
+    expect(payload.itens).toEqual([{ descricao: 'Frete', quantidade: 12, valor: '310.45' }]);
     expect(payload.despesas).toEqual([{ descricao: 'Pedágio', data: '2026-11-13', valor: '22.10', origem: 'manual' }]);
     expect(payload).not.toHaveProperty('id');
     expect(payload).not.toHaveProperty('empresaId');
@@ -29,9 +29,12 @@ describe('Contrato API 3.9 / rotas integradas', () => {
     expect(c.valorMensal).toBe(210.3);
     expect(costPayload(c)).not.toHaveProperty('empresaId');
     expect(costPayload(c).valorMensal).toBe('210.30');
+    expect(costPayload(c).integrarFinanceiro).toBe(true);
+    expect(costPayload(c).formaPagamento).toBe('Boleto');
     const [plan] = mapPlans([{ id: 'pg1', origem: 'custoFixo', origemId: 'c1:2026-11', forma: 'avista', parcelas: 1, vencimento: '2026-11-10', pagas: { '0': '2026-11-10' } }]);
     expect(plan.pagas['0']).toBe('2026-11-10');
     expect(planPayload(plan)).not.toHaveProperty('id');
+    expect(planPayload(plan).meioPagamento).toBe('Boleto');
   });
 
   it('normaliza contas e envia veículo opcional como null', () => {

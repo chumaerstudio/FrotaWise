@@ -46,7 +46,7 @@ export function competenciasDoCusto(
   const atual = ymAtual(hojeIso);
   const limiteFuturo = addMesesYM(atual, c.ativo ? MESES_A_FRENTE_FINANCEIRO : 0);
   const fim = c.fim && /^\d{4}-\d{2}$/.test(c.fim) ? c.fim : null;
-  const limite = fim && fim < limiteFuturo ? fim : limiteFuturo;
+  const limite = c.ativo && fim ? fim : limiteFuturo;
   const out: string[] = [];
   for (let ym = inicio, guard = 0; ym <= limite && guard < 600; ym = addMesesYM(ym, 1), guard++) out.push(ym);
   return out;
@@ -94,6 +94,8 @@ export function normalizarCustosFixos(arr: unknown): CustoFixo[] {
       inicio: ymDe(c.inicio),
       fim: c.fim ? ymDe(c.fim) : null,
       ativo: c.ativo !== false,
+      integrarFinanceiro: c.integrarFinanceiro !== false,
+      formaPagamento: String(c.formaPagamento || 'Boleto'),
       obs: c.obs || '',
     }));
 }

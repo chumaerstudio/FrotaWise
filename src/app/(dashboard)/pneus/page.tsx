@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { httpClient } from '@/lib/http/client';
 import {
   ArrowRightLeft,
   Gauge,
@@ -15,11 +16,12 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
-import { formatNumber } from '@/services/api';
-import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
-import { getClassificacaoTone } from '@/services/statusTones';
+import { formatNumber, today } from '@/services/api';
+import { registrarMovimentacao } from '@/services/pneuKmService';
+import { api39Error } from '@/services/operacional39Service';
+import { getTireLimits, getTireKmStageStyle, getTireKmStageLegend } from '@/services/pneusService';
 import { getVehicleChassisSlots } from '@/services/veiculosService';
-import { Btn, Chip, Empty, Field, Modal, SectionHead, TireChip, cx } from '@/components/ui';
+import { Btn, Chip, Empty, Field, FormActions, Modal, SectionHead, TireChip, cx } from '@/components/ui';
 import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 import { ChassisView } from '@/components/chassis/ChassisView';
 
@@ -39,6 +41,8 @@ export default function PneusHubPage() {
     setHistoryModalTire,
     startEditTire,
     handleDeleteTire,
+    setTires, fuelings, maintenances, trips, syncOdometers, showToast,
+    liveMode, refreshLiveData,
   } = useEstoquePneus();
 
   const [tireHubSubTab, setTireHubSubTab] = useState<'chassis' | 'stock' | 'all'>('chassis');
@@ -48,6 +52,7 @@ export default function PneusHubPage() {
   const [zoomed, setZoomed] = useState(false);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [selectedSlotCode, setSelectedSlotCode] = useState('');
+  const [swapDraft, setSwapDraft] = useState<{ sourceId: string; targetId: string; kmSource: string; kmTarget: string; kmVehicle: string } | null>(null);
 
   const activeVehicle =
     vehicles.find((v) => v.id === selectedChassisVehicleId) || vehicles[0];
@@ -76,6 +81,70 @@ export default function PneusHubPage() {
   const armed = !!sel || !!draggedTireId;
   const dropTire = () => (draggedTireId ? tires.find((t) => t.id === draggedTireId) : null);
 
+  const beginTireSwap = (sourceId: string, targetId: string) => {
+    if (!activeVehicle || sourceId === targetId) return;
+    const source = tires.find((t) => t.id === sourceId);
+    const target = tires.find((t) => t.id === targetId);
+    if (!source || !target) return;
+    if (source.veiculoAtualId !== activeVehicle.id || target.veiculoAtualId !== activeVehicle.id) {
+      showToast('Para trocar posições, arraste um pneu montado sobre outro pneu do mesmo chassi.', 'warning');
+      return;
+    }
+    const kmVehicle = Number(activeVehicle.kmAtual) || 0;
+    const projectedKm = (tire: typeof source) => {
+      const lastReading = [...(tire.historicoVeiculos || [])].reverse().find((movement) =>
+        !movement.cancelada && movement.veiculoId === activeVehicle.id && movement.kmVeiculo != null && Number.isFinite(Number(movement.kmVeiculo))
+      )?.kmVeiculo;
+      return Math.max(0, Number(tire.kmTotal) || 0) + (lastReading == null ? 0 : Math.max(0, kmVehicle - Number(lastReading)));
+    };
+    setSwapDraft({ sourceId, targetId, kmSource: String(projectedKm(source)), kmTarget: String(projectedKm(target)), kmVehicle: String(kmVehicle) });
+  };
+
+  const confirmTireSwap = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!swapDraft || !activeVehicle) return;
+    const source = tires.find((t) => t.id === swapDraft.sourceId);
+    const target = tires.find((t) => t.id === swapDraft.targetId);
+    if (!source || !target || source.veiculoAtualId !== activeVehicle.id || target.veiculoAtualId !== activeVehicle.id) {
+      showToast('A posição dos pneus mudou. Atualize a tela e tente novamente.', 'error'); setSwapDraft(null); return;
+    }
+    const kmSource = Number(swapDraft.kmSource); const kmTarget = Number(swapDraft.kmTarget);
+    const kmVehicle = swapDraft.kmVehicle === '' ? null : Number(swapDraft.kmVehicle);
+    if (!Number.isFinite(kmSource) || kmSource < Number(source.kmTotal || 0)) { showToast(`O KM final do pneu #${source.fogo} não pode ser menor que o KM acumulado atual.`, 'error'); return; }
+    if (!Number.isFinite(kmTarget) || kmTarget < Number(target.kmTotal || 0)) { showToast(`O KM final do pneu #${target.fogo} não pode ser menor que o KM acumulado atual.`, 'error'); return; }
+    if (kmVehicle !== null && (!Number.isFinite(kmVehicle) || kmVehicle < Number(activeVehicle.kmAtual || 0))) { showToast('O KM do veículo não pode ser menor que o hodômetro atual.', 'error'); return; }
+    const sourcePos = source.posicaoAtual; const targetPos = target.posicaoAtual;
+    const sourceDelta = kmSource - Number(source.kmTotal || 0); const targetDelta = kmTarget - Number(target.kmTotal || 0);
+    if (liveMode) {
+      try {
+        await httpClient.post(`/pneus/${source.id}/operacao`, { targetAction: 'Estocar', targetVehicleId: null, targetSlotCode: null, kmRodados: sourceDelta, ...(kmVehicle == null ? {} : { hodometroRetiradaKm: kmVehicle }), localEstoque: 'Troca de posição', obs: `Troca de posição para ${targetPos}` }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
+        await httpClient.post(`/pneus/${target.id}/operacao`, { targetAction: 'Mount', targetVehicleId: activeVehicle.id, targetSlotCode: sourcePos, kmRodados: targetDelta, ...(kmVehicle == null ? {} : { hodometroInstalacaoKm: kmVehicle }), obs: `Troca de posição com pneu #${source.fogo}` }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
+        await httpClient.post(`/pneus/${source.id}/operacao`, { targetAction: 'Mount', targetVehicleId: activeVehicle.id, targetSlotCode: targetPos, kmRodados: 0, ...(kmVehicle == null ? {} : { hodometroInstalacaoKm: kmVehicle }), obs: `Troca de posição com pneu #${target.fogo}` }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
+        if (kmVehicle != null) await httpClient.patch(`/veiculos/${activeVehicle.id}`, { kmAtual: kmVehicle });
+        await refreshLiveData();
+        showToast(`Posições dos pneus #${source.fogo} e #${target.fogo} trocadas.`);
+        setSwapDraft(null); setDraggedTireId(null); return;
+      } catch (error) {
+        await refreshLiveData().catch(() => undefined);
+        showToast(`Não foi possível concluir a troca integralmente. Confira as posições atuais antes de repetir. ${api39Error(error)}`, 'error');
+        return;
+      }
+    }
+    const date = today();
+    const sourceMove = registrarMovimentacao(source, { movId: `swap-${Date.now()}-a`, tipo: 'AddKm', data: date, kmFinal: kmSource, placa: activeVehicle.placa, modelo: activeVehicle.modelo, veiculoId: activeVehicle.id, kmVeiculo, obs: `Troca de posição ${sourcePos} → ${targetPos} com pneu #${target.fogo}` });
+    const targetMove = registrarMovimentacao(target, { movId: `swap-${Date.now()}-b`, tipo: 'AddKm', data: date, kmFinal: kmTarget, placa: activeVehicle.placa, modelo: activeVehicle.modelo, veiculoId: activeVehicle.id, kmVeiculo, obs: `Troca de posição ${targetPos} → ${sourcePos} com pneu #${source.fogo}` });
+    if (sourceMove.erro || targetMove.erro) { showToast(sourceMove.erro || targetMove.erro || 'Não foi possível registrar a troca.', 'error'); return; }
+    const nextTires = tires.map((t) => {
+      if (t.id === source.id) return { ...sourceMove.tire, classificacao: 'Rodando' as const, veiculoAtualId: activeVehicle.id, posicaoAtual: targetPos, localEstoque: '' };
+      if (t.id === target.id) return { ...targetMove.tire, classificacao: 'Rodando' as const, veiculoAtualId: activeVehicle.id, posicaoAtual: sourcePos, localEstoque: '' };
+      return t;
+    });
+    setTires(nextTires);
+    const changes = kmVehicle == null ? [] : syncOdometers([activeVehicle.id], fuelings, maintenances, 'troca de posição dos pneus', trips, nextTires);
+    showToast(`Posições dos pneus #${source.fogo} e #${target.fogo} trocadas. KM atualizado no histórico.` + (changes.length ? ` ${changes.join(' · ')}` : ''));
+    setSwapDraft(null); setDraggedTireId(null);
+  };
+
   const renderSlot = (slot: { code: string; label: string }) => {
     const mt = mounted.find((t) => t.posicaoAtual === slot.code);
     if (mt) {
@@ -91,6 +160,8 @@ export default function PneusHubPage() {
             setSelectedTireForActionId(id);
           }}
           onDragEndTire={() => setDraggedTireId(null)}
+          onDropTire={beginTireSwap}
+          draggedTireId={draggedTireId}
         />
       );
     }
@@ -257,7 +328,7 @@ export default function PneusHubPage() {
             <div className={cx('p-5 ef-g-chassis', layout.axles.length >= 3 && 'ef-g-chassis-wide')}>
               <div className="py-2 ef-chassis-preview">
                 <div className="ef-chassis-preview-toolbar"><span>Chassi · {activeVehicle.placa}</span><Btn sm icon={zoomed ? ZoomOut : ZoomIn} onClick={() => setZoomed(value => !value)}>{zoomed ? 'Ajustar à tela' : 'Ampliar'}</Btn></div>
-                <ChassisView layout={layout} eixos={activeVehicle.eixos} renderSlot={renderSlot} zoomed={zoomed} />
+                <ChassisView layout={layout} eixos={activeVehicle.eixos} categoria={activeVehicle.categoria} renderSlot={renderSlot} zoomed={zoomed} />
               </div>
 
               <div className="ef-chassis-side">
@@ -280,18 +351,9 @@ export default function PneusHubPage() {
                 className="flex flex-wrap items-center gap-x-5 gap-y-2 ef-t12_5"
                 style={{ color: 'var(--ink2)' }}
               >
-                {[0, 1, 2, 3, 4].map((n) => {
-                  const s = getTireRecapStyle(n);
-                  return (
-                    <span key={n} className="flex items-center gap-2">
-                      <i
-                        className="ef-w3_5 ef-h3_5 rounded inline-block"
-                        style={{ background: s.c }}
-                      />
-                      {s.label}
-                    </span>
-                  );
-                })}
+                {getTireKmStageLegend().map((stage) => (
+                  <span key={stage.stage} className="flex items-center gap-2"><i className="ef-w3_5 ef-h3_5 rounded inline-block" style={{ background: stage.c }} />{stage.label}</span>
+                ))}
               </div>
               <div
                 className="drop p-4 flex flex-wrap items-center justify-between gap-2 cursor-pointer"
@@ -336,6 +398,22 @@ export default function PneusHubPage() {
         </Modal>
       )}
 
+      {swapDraft && activeVehicle && (() => {
+        const source = tires.find((t) => t.id === swapDraft.sourceId); const target = tires.find((t) => t.id === swapDraft.targetId);
+        if (!source || !target) return null;
+        return <Modal title={`Trocar pneus #${source.fogo} e #${target.fogo}`} onClose={() => setSwapDraft(null)}>
+          <form onSubmit={confirmTireSwap} className="space-y-4">
+            <p className="ef-t13" style={{ color: 'var(--ink2)' }}>As posições <b>{source.posicaoAtual}</b> e <b>{target.posicaoAtual}</b> serão invertidas no veículo {activeVehicle.placa}. Os KM sugeridos consideram a diferença desde a última leitura do hodômetro em cada pneu; confira antes de confirmar.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={`KM final do pneu #${source.fogo}`}><input required type="number" min={source.kmTotal} className="inp mono" value={swapDraft.kmSource} onChange={(e) => setSwapDraft({ ...swapDraft, kmSource: e.target.value })} /></Field>
+              <Field label={`KM final do pneu #${target.fogo}`}><input required type="number" min={target.kmTotal} className="inp mono" value={swapDraft.kmTarget} onChange={(e) => setSwapDraft({ ...swapDraft, kmTarget: e.target.value })} /></Field>
+            </div>
+            <Field label={`KM atual do veículo ${activeVehicle.placa}`}><input type="number" min={activeVehicle.kmAtual} className="inp mono" value={swapDraft.kmVehicle} onChange={(e) => setSwapDraft({ ...swapDraft, kmVehicle: e.target.value })} /></Field>
+            <FormActions onCancel={() => setSwapDraft(null)} label="Confirmar troca de posições" v="primary" />
+          </form>
+        </Modal>;
+      })()}
+
       {tireHubSubTab === 'stock' && (
         <div className="card overflow-hidden ef-rise">
           <SectionHead
@@ -367,7 +445,7 @@ export default function PneusHubPage() {
                 </thead>
                 <tbody>
                   {totalStockTires.map((t) => {
-                    const st = getTireRecapStyle(t.recapagens);
+                    const st = getTireKmStageStyle(t, company);
                     return (
                       <tr key={t.id}>
                         <td>
@@ -453,7 +531,7 @@ export default function PneusHubPage() {
               <tbody>
                 {tires.map((t) => {
                   const veh = vehicles.find((v) => v.id === t.veiculoAtualId);
-                  const st = getTireRecapStyle(t.recapagens);
+                  const st = getTireKmStageStyle(t, company);
                   const lim = getTireLimits(t, company);
                   const pct = Math.min(
                     100,
@@ -482,9 +560,9 @@ export default function PneusHubPage() {
                         </div>
                       </td>
                       <td>
-                        <Chip tone={getClassificacaoTone(t.classificacao)}>
+                        <span className="inline-flex items-center rounded-lg px-2.5 py-1 ef-t12 font-semibold text-white" style={{ background: st.c }}>
                           {t.classificacao}
-                        </Chip>
+                        </span>
                       </td>
                       <td className="mono ef-t12_5">
                         {veh ? `${veh.placa} (${t.posicaoAtual})` : t.localEstoque || 'Estoque'}

@@ -146,7 +146,7 @@ export function buildPayables(args: {
   }));
 
   // Custo fixo: uma conta por competência (mês), com vencimento no dia combinado.
-  custosFixos.forEach((c) => {
+  custosFixos.filter((c) => c.integrarFinanceiro !== false).forEach((c) => {
     competenciasDoCusto(c, hojeIso).forEach((ym) => {
       const [yy, mm] = ym.split('-');
       base.push({
@@ -154,7 +154,7 @@ export function buildPayables(args: {
         origemId: idCompetencia(c.id, ym),
         tipo: 'Custo Fixo',
         descricao: `${c.descricao} · ${mm}/${yy}`,
-        sub: [placa(c.veiculoId), c.categoria].filter(Boolean).join(' · '),
+        sub: [placa(c.veiculoId), c.categoria, c.formaPagamento ? `Forma: ${c.formaPagamento}` : ''].filter(Boolean).join(' · '),
         total: Number(c.valorMensal) || 0,
         data: vencimentoDaCompetencia(ym, c.diaVencimento),
       });
@@ -174,7 +174,7 @@ export function buildPayables(args: {
       idx: index,
       tipo: item.tipo,
       descricao: item.descricao,
-      sub: item.sub,
+      sub: [item.sub, plan?.meioPagamento ? `Meio: ${plan.meioPagamento}` : ''].filter(Boolean).join(' · '),
       total: item.total,
       forma: parcelado ? 'parcelado' : 'avista',
       parcelas: count,

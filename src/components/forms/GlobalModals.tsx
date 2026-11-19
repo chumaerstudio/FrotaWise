@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { httpClient } from '@/lib/http/client';
+import { api39Error, savePlan } from '@/services/operacional39Service';
 import { Disc, History, X } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import {
@@ -13,7 +15,7 @@ import {
   formatNumber,
   today,
 } from '@/services/api';
-import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
+import { getTireLimits, getTireKmStageStyle } from '@/services/pneusService';
 import {
   aplicarAjusteKm,
   calcularKmMovimentacao,
@@ -23,7 +25,7 @@ import {
   registrarMovimentacao,
   ultimaMovimentacaoEditavel,
 } from '@/services/pneuKmService';
-import { getClassificacaoTone, getVeiculoStatusTone } from '@/services/statusTones';
+import { getVeiculoStatusTone } from '@/services/statusTones';
 import { sincronizarDespesaAbastecimento } from '@/services/viagensService';
 import { formatDateShort } from '@/services/financeiroLocal';
 import {
@@ -111,7 +113,7 @@ export const GlobalModals: React.FC = () => {
     editingFuelId,
     setEditingFuelId,
     syncOdometers,
-    liveMode, runLiveMutation,
+    liveMode, runLiveMutation, refreshLiveData,
   } = useEstoquePneus();
 
   // Helper único; dados só são atualizados após confirmação do FastAPI.
@@ -133,7 +135,9 @@ export const GlobalModals: React.FC = () => {
   useEffect(() => {
     if (tireActionModal) {
       setActionMovId(`mov-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-      setActionKmVeiculoInput('');
+      const currentVehicleId = tireActionModal.targetAction === 'Mount' ? tireActionModal.targetVehicleId : tireActionModal.tire.veiculoAtualId;
+      const currentVehicle = vehicles.find((vehicle) => vehicle.id === currentVehicleId);
+      setActionKmVeiculoInput(currentVehicle ? String(currentVehicle.kmAtual || 0) : '');
       setActionKmInput('');
       setActionObsInput('');
       setActionStockLocInput(tireActionModal.tire.localEstoque || 'Prateleira A-01');
@@ -141,7 +145,7 @@ export const GlobalModals: React.FC = () => {
       setActionFornecedorInput('');
       setActionValorInput('');
     }
-  }, [tireActionModal]);
+  }, [tireActionModal, vehicles]);
 
   const emptyVehicle = { placa: '', uf: 'SP', modelo: '', categoria: '', eixos: 3, kmAtual: '' };
   const [vehicleForm, setVehicleForm] = useState(emptyVehicle);
@@ -179,6 +183,7 @@ export const GlobalModals: React.FC = () => {
   const emptyMaint = () => ({
     integrarFinanceiro: false,
     pgForma: 'avista' as 'avista' | 'parcelado',
+    pgMeio: 'Boleto',
     pgParcelas: '2',
     pgVenc: '',
     osNumero: '',
@@ -211,6 +216,7 @@ export const GlobalModals: React.FC = () => {
           valor: String(m.valor),
           integrarFinanceiro: m.integrarFinanceiro !== false,
           pgForma: pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.forma || 'avista',
+          pgMeio: pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.meioPagamento || 'Boleto',
           pgParcelas: String(pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.parcelas || 2),
           pgVenc: pagamentos.find((p) => p.origem === 'manutencao' && p.origemId === m.id)?.vencimento || m.data,
         });
@@ -232,6 +238,7 @@ export const GlobalModals: React.FC = () => {
   const emptyFine = () => ({
     integrarFinanceiro: false,
     pgForma: 'avista' as 'avista' | 'parcelado',
+    pgMeio: 'Boleto',
     pgParcelas: '2',
     pgVenc: '',
     ait: '',
@@ -268,6 +275,7 @@ export const GlobalModals: React.FC = () => {
           buscaOrigem: '',
           integrarFinanceiro: f.integrarFinanceiro !== false,
           pgForma: pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.forma || 'avista',
+          pgMeio: pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.meioPagamento || 'Boleto',
           pgParcelas: String(pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.parcelas || 2),
           pgVenc: pagamentos.find((p) => p.origem === 'multa' && p.origemId === f.id)?.vencimento || f.data,
         });
@@ -333,7 +341,7 @@ export const GlobalModals: React.FC = () => {
     setFuelForm(emptyFuel());
   };
 
-  const upsertPaymentPlan = (origem: PagamentoPlano['origem'], origemId: string, form: { pgForma: 'avista' | 'parcelado'; pgParcelas: string; pgVenc: string }, data: string) => {
+  const upsertPaymentPlan = (origem: PagamentoPlano['origem'], origemId: string, form: { pgForma: 'avista' | 'parcelado'; pgMeio?: string; pgParcelas: string; pgVenc: string }, data: string) => {
     const parcelado = form.pgForma === 'parcelado';
     const parcelas = parcelado ? Math.round(Number(form.pgParcelas)) : 1;
     const atual = pagamentos.find((p) => p.origem === origem && p.origemId === origemId);
@@ -342,6 +350,7 @@ export const GlobalModals: React.FC = () => {
       origem,
       origemId,
       forma: parcelado ? 'parcelado' : 'avista',
+      meioPagamento: form.pgMeio || 'Boleto',
       parcelas,
       vencimento: form.pgVenc || data,
       pagas: Object.fromEntries(Object.entries(atual?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
@@ -373,6 +382,52 @@ export const GlobalModals: React.FC = () => {
     return true;
   };
 
+  const liveMutationWithPlan = async (
+    method: 'post' | 'patch', path: string, payload: Record<string, unknown>,
+    origem: PagamentoPlano['origem'],
+    form: { integrarFinanceiro: boolean; pgForma: 'avista' | 'parcelado'; pgMeio?: string; pgParcelas: string; pgVenc: string },
+    data: string, success: string, existingId?: string
+  ): Promise<boolean> => {
+    let responseData: any;
+    try {
+      const response = await httpClient.request({
+        method, url: path, data: payload,
+        headers: method === 'post' ? { 'Idempotency-Key': crypto.randomUUID() } : undefined,
+        timeout: 30000,
+      });
+      responseData = response.data;
+    } catch (error) {
+      showToast(api39Error(error), 'error');
+      return false;
+    }
+    let notice = success;
+    let tone: 'success' | 'warning' | 'error' = 'success';
+    if (form.integrarFinanceiro) {
+      const origemId = existingId || String(responseData?.id ?? responseData?.data?.id ?? responseData?.item?.id ?? '');
+      if (!origemId) {
+        notice = 'O registro foi salvo, mas o servidor não retornou o ID para vinculá-lo ao Financeiro.';
+        tone = 'warning';
+      } else {
+        try {
+          const parcelas = form.pgForma === 'parcelado' ? Math.round(Number(form.pgParcelas)) : 1;
+          await savePlan({ origem, origemId, forma: form.pgForma, meioPagamento: form.pgMeio || 'Boleto', parcelas, vencimento: form.pgVenc || data, pagas: {} });
+        } catch (error) {
+          notice = `O registro foi salvo, mas não foi possível criar o plano no Financeiro: ${api39Error(error)}`;
+          tone = 'error';
+        }
+      }
+    } else if (existingId && pagamentos.some((plan) => plan.origem === origem && plan.origemId === existingId)) {
+      notice = 'Registro atualizado. O plano financeiro anterior permanece, pois a API atual não disponibiliza uma operação documentada para removê-lo.';
+      tone = 'warning';
+    } else if (!form.integrarFinanceiro) {
+      notice = 'Registro salvo. A API atual não documenta um campo para desativar a integração financeira deste tipo de lançamento; confirme o resultado no Financeiro.';
+      tone = 'warning';
+    }
+    try { await refreshLiveData(); } catch { /* Registro principal já foi confirmado. */ }
+    showToast(notice, tone);
+    return true;
+  };
+
   const sufixoKm = (mud: string[]) =>
     mud.length ? ` Hodômetro ajustado (${mud.join('; ')}).` : '';
 
@@ -384,7 +439,7 @@ export const GlobalModals: React.FC = () => {
     const kmInicial = kmInicialDaProximaMovimentacao(tireNow);
     const kmFinal = actionKmInput === '' ? null : Number(actionKmInput);
     const calc = calcularKmMovimentacao(kmInicial, kmFinal);
-    const veiculoId = tireNow.veiculoAtualId || (targetAction === 'Mount' ? targetVehicleId : '');
+    const veiculoId = targetAction === 'Mount' ? (targetVehicleId || tireNow.veiculoAtualId) : tireNow.veiculoAtualId;
     const veiculo = vehicles.find((v) => v.id === veiculoId);
     return { tireNow, kmInicial, kmFinal, calc, veiculo };
   };
@@ -469,18 +524,23 @@ export const GlobalModals: React.FC = () => {
 
     if (liveMode) {
       // Contrato do backend: kmRodados = KM final − KM inicial (o KM inicial é o último KM do pneu).
-      const ok = awaitLive('post', `/pneus/${tire.id}/operacao`, {
-        targetAction,
-        targetVehicleId: targetAction === 'Mount' ? targetVehicleId : null,
-        targetSlotCode: targetAction === 'Mount' ? targetSlotCode : null,
-        kmRodados: kmFinal === null ? null : calc.km,
-        localEstoque: actionStockLocInput || 'Almoxarifado Geral',
-        tipoBanda: actionBandaInput || null,
-        fornecedor: actionFornecedorInput || null,
-        valor: Math.max(0, Number(actionValorInput) || 0),
-        obs: actionObsInput,
-      }, 'Operação do pneu concluída.', true);
-      void ok.then(success => { if (success) { setTireActionModal(null); setSelectedTireForActionId(null); }});
+      const vehicleReading = kmVeic === null || !veiculo ? {} : targetAction === 'Mount'
+        ? { hodometroInstalacaoKm: kmVeic } : targetAction === 'AddKm' ? {} : { hodometroRetiradaKm: kmVeic };
+      void (async () => {
+        const ok = await awaitLive('post', `/pneus/${tire.id}/operacao`, {
+          targetAction, targetVehicleId: targetAction === 'Mount' ? targetVehicleId : null,
+          targetSlotCode: targetAction === 'Mount' ? targetSlotCode : null,
+          ...vehicleReading, kmRodados: kmFinal === null ? null : calc.km,
+          localEstoque: actionStockLocInput || 'Almoxarifado Geral', tipoBanda: actionBandaInput || null,
+          fornecedor: actionFornecedorInput || null, valor: Math.max(0, Number(actionValorInput) || 0), obs: actionObsInput,
+        }, 'Movimentação do pneu registrada.', true, actionMovId);
+        if (!ok) return;
+        if (kmVeic !== null && veiculo) {
+          const updated = await awaitLive('patch', `/veiculos/${veiculo.id}`, { kmAtual: kmVeic }, 'Hodômetro do veículo atualizado.');
+          if (!updated) { showToast('A movimentação foi registrada, mas o hodômetro do veículo não foi atualizado. Confira o cadastro do veículo.', 'error'); return; }
+        }
+        setTireActionModal(null); setSelectedTireForActionId(null);
+      })();
       return;
     }
 
@@ -490,7 +550,7 @@ export const GlobalModals: React.FC = () => {
 
     const currentVehicle = vehicles.find((v) => v.id === tireNow.veiculoAtualId);
     const targetVehicle = vehicles.find((v) => v.id === targetVehicleId);
-    const refVeh = currentVehicle ?? targetVehicle;
+    const refVeh = targetAction === 'Mount' ? (targetVehicle ?? currentVehicle) : currentVehicle;
     const mov = registrarMovimentacao(tireNow, {
       movId: actionMovId,
       tipo: targetAction,
@@ -748,7 +808,7 @@ export const GlobalModals: React.FC = () => {
       showToast('Pneus e recapagens são lançados em Pneus e estoque, pelas movimentações do pneu.', 'error');
       return;
     }
-    if (!liveMode && !validatePaymentPlan(maintenanceForm)) return;
+    if (!validatePaymentPlan(maintenanceForm)) return;
     if (liveMode) {
       if (!maintenanceForm.veiculoId || !maintenanceForm.descricao.trim() || !maintenanceForm.categoria) return;
       const item = {
@@ -759,7 +819,7 @@ export const GlobalModals: React.FC = () => {
         fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
         data: maintenanceForm.data, valor: Number(maintenanceForm.valor),
       };
-      void awaitLive('post', '/manutencoes', item, 'Manutenção registrada.', true)
+      void liveMutationWithPlan('post', '/manutencoes', item, 'manutencao', maintenanceForm, maintenanceForm.data, 'Manutenção registrada.')
         .then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
@@ -810,7 +870,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateMaintenance = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!liveMode && !validatePaymentPlan(maintenanceForm)) return;
+    if (!validatePaymentPlan(maintenanceForm)) return;
     if (liveMode) {
       const old = maintenances.find(m => m.id === editingMaintId);
       if (!old) return;
@@ -818,13 +878,13 @@ export const GlobalModals: React.FC = () => {
         showToast('Após o lançamento, KM, data e veículo não podem ser alterados. Solicite uma conciliação administrativa.', 'warning');
         return;
       }
-      void awaitLive('patch', `/manutencoes/${old.id}`, {
+      void liveMutationWithPlan('patch', `/manutencoes/${old.id}`, {
         osNumero: maintenanceForm.osNumero, tipo: maintenanceForm.tipo,
         categoria: maintenanceForm.categoria, peca: maintenanceForm.peca,
         descricao: maintenanceForm.descricao.trim(),
         fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
         valor: Number(maintenanceForm.valor),
-      }, 'Manutenção atualizada.').then(ok => {if (ok) closeMaintenanceModal();});
+      }, 'manutencao', maintenanceForm, old.data, 'Manutenção atualizada.', old.id).then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
     const old = maintenances.find((m) => m.id === editingMaintId);
@@ -1053,7 +1113,7 @@ export const GlobalModals: React.FC = () => {
 
   const handleCreateFine = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!liveMode && !validatePaymentPlan(fineForm)) return;
+    if (!validatePaymentPlan(fineForm)) return;
     if (liveMode) {
       if (!fineForm.veiculoId || !fineForm.motivo.trim() || !fineForm.valor) return;
       const nic = fineForm.tipoLancamento === 'NIC';
@@ -1061,14 +1121,16 @@ export const GlobalModals: React.FC = () => {
       if (nic && (!original || original.veiculoId !== fineForm.veiculoId)) {
         showToast('Selecione uma multa original do mesmo veículo para criar a NIC.', 'error'); return;
       }
-      void awaitLive('post', '/multas', {
+      if (nic) {
+        showToast('O contrato atual do servidor não permite criar NICs por este formulário. Use o lançamento de multa disponível no backend.', 'error');
+        return;
+      }
+      void liveMutationWithPlan('post', '/multas', {
         veiculoId: fineForm.veiculoId, ait: fineForm.ait.trim(), motivo: fineForm.motivo.trim(),
-        identificado: nic ? original!.identificado : fineForm.identificado,
-        motorista: nic ? original!.motorista : fineForm.motorista || 'Não informado',
-        status: fineForm.status, data: fineForm.data, pontos: nic ? 0 : Number(fineForm.pontos),
-        valorOriginal: Number(fineForm.valor),
-        tipoLancamento: nic ? 'NIC' : 'Multa', multaOrigemId: nic ? original!.id : null,
-      }, nic ? 'NIC vinculada e registrada.' : 'Multa registrada.', true)
+        identificado: fineForm.identificado,
+        motorista: fineForm.motorista || 'Não informado', status: fineForm.status,
+        data: fineForm.data, pontos: Number(fineForm.pontos), valorOriginal: Number(fineForm.valor),
+      }, 'multa', fineForm, fineForm.data, 'Multa registrada.')
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
@@ -1143,14 +1205,14 @@ export const GlobalModals: React.FC = () => {
 
   const handleUpdateFine = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!liveMode && !validatePaymentPlan(fineForm)) return;
+    if (!validatePaymentPlan(fineForm)) return;
     if (liveMode) {
       const old = fines.find(f => f.id === editingFineId);
       if (!old) return;
       if (old.veiculoId !== fineForm.veiculoId || old.motivo !== fineForm.motivo.trim() || old.data !== fineForm.data || (old.valorOriginal ?? old.valor) !== Number(fineForm.valor) || old.ait !== fineForm.ait.trim() || old.identificado !== fineForm.identificado || (old.motorista || '') !== (fineForm.identificado ? fineForm.motorista || '' : 'Não identificado') || old.pontos !== (fineForm.identificado ? Number(fineForm.pontos) : 0)) {
         showToast('Somente a situação da multa pode ser alterada por aqui. Os demais dados permanecerão iguais.', 'warning'); return;
       }
-      void awaitLive('patch', `/multas/${old.id}/status`, {status: fineForm.status}, 'Status da multa atualizado.')
+      void liveMutationWithPlan('patch', `/multas/${old.id}/status`, { status: fineForm.status }, 'multa', fineForm, old.data, 'Status da multa atualizado.', old.id)
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
@@ -1307,7 +1369,7 @@ export const GlobalModals: React.FC = () => {
             ) : (
               <div className="px-5">
                 {mountedTires.map((t, i) => {
-                  const st = getTireRecapStyle(t.recapagens);
+                  const st = getTireKmStageStyle(t, company);
                   const lim = getTireLimits(t, company);
                   const pct = Math.min(100, ((Number(t.kmTotal) || 0) / (lim.kmSucatear || 1)) * 100);
                   const barC =
@@ -1586,7 +1648,7 @@ export const GlobalModals: React.FC = () => {
           }}
         >
           <div className="flex items-center gap-2 mb-3 ef-t13">
-            <Chip tone={getClassificacaoTone(hTire.classificacao)}>{hTire.classificacao}</Chip>
+            <span className="inline-flex items-center rounded-lg px-2.5 py-1 ef-t12 font-semibold text-white" style={{ background: getTireKmStageStyle(hTire, company).c }}>{hTire.classificacao}</span>
             <span style={{ color: 'var(--mute)' }}>
               KM acumulado do pneu = soma das movimentações válidas abaixo
             </span>
@@ -1746,10 +1808,16 @@ export const GlobalModals: React.FC = () => {
               <input
                 required
                 className="inp"
-                placeholder="Cavalo Trucado 3 Eixos"
+                placeholder="Ex.: Cavalo Trucado 3 Eixos ou Carreta"
+                list="frotawise-categorias-veiculo"
                 value={vehicleForm.categoria}
                 onChange={(e) => setVehicleForm({ ...vehicleForm, categoria: e.target.value })}
               />
+              <datalist id="frotawise-categorias-veiculo">
+                <option value="Carreta" /><option value="Cavalo Mecânico" /><option value="Caminhão Toco" />
+                <option value="Caminhão Truck" /><option value="Bitruck" />
+              </datalist>
+              <p className="ef-t12" style={{ color: 'var(--mute)' }}>Para carretas, selecione Carreta e informe a quantidade de eixos. O desenho específico respeita a mesma configuração de pneus por eixo.</p>
             </Field>
             <Field label="Marca / modelo">
               <input
@@ -2085,17 +2153,21 @@ export const GlobalModals: React.FC = () => {
                 />
               </Field>
             </div>
-            {!liveMode && (
-              <div className="ef-finopts space-y-3">
+            <div className="ef-finopts space-y-3">
                 <label className="ef-check">
                   <input type="checkbox" checked={maintenanceForm.integrarFinanceiro} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, integrarFinanceiro: e.target.checked })} />
                   <span><b>Integrar com o financeiro</b><span className="block ef-t12_5" style={{ color: 'var(--mute)' }}>Lança esta ordem de serviço na área Financeiro, com parcelas e vencimento.</span></span>
                 </label>
                 {maintenanceForm.integrarFinanceiro && (
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Forma de pagamento">
+                    <Field label="Condição de pagamento">
                       <select className="inp" value={maintenanceForm.pgForma} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, pgForma: e.target.value as 'avista' | 'parcelado' })}>
                         <option value="avista">À vista</option><option value="parcelado">Parcelado</option>
+                      </select>
+                    </Field>
+                    <Field label="Meio de pagamento">
+                      <select className="inp" value={maintenanceForm.pgMeio} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, pgMeio: e.target.value })}>
+                        <option>Boleto</option><option>Pix</option><option>Transferência</option><option>Débito automático</option><option>Cartão</option><option>Dinheiro</option><option>Outro</option>
                       </select>
                     </Field>
                     <Field label="Quantidade de parcelas">
@@ -2108,8 +2180,7 @@ export const GlobalModals: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
+            </div>
             <FormActions
               onCancel={closeMaintenanceModal}
               label={editingMaintId ? 'Salvar alterações' : 'Salvar manutenção'}
@@ -2549,17 +2620,21 @@ export const GlobalModals: React.FC = () => {
                 gera pontos na CNH.
               </div>
             )}
-            {!liveMode && (
-              <div className="ef-finopts space-y-3">
+            <div className="ef-finopts space-y-3">
                 <label className="ef-check">
                   <input type="checkbox" checked={fineForm.integrarFinanceiro} onChange={(e) => setFineForm({ ...fineForm, integrarFinanceiro: e.target.checked })} />
                   <span><b>Integrar com o financeiro</b><span className="block ef-t12_5" style={{ color: 'var(--mute)' }}>Lança esta multa na área Financeiro, com parcelas e vencimento.</span></span>
                 </label>
                 {fineForm.integrarFinanceiro && (
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Forma de pagamento">
+                    <Field label="Condição de pagamento">
                       <select className="inp" value={fineForm.pgForma} onChange={(e) => setFineForm({ ...fineForm, pgForma: e.target.value as 'avista' | 'parcelado' })}>
                         <option value="avista">À vista</option><option value="parcelado">Parcelado</option>
+                      </select>
+                    </Field>
+                    <Field label="Meio de pagamento">
+                      <select className="inp" value={fineForm.pgMeio} onChange={(e) => setFineForm({ ...fineForm, pgMeio: e.target.value })}>
+                        <option>Boleto</option><option>Pix</option><option>Transferência</option><option>Débito automático</option><option>Cartão</option><option>Dinheiro</option><option>Outro</option>
                       </select>
                     </Field>
                     <Field label="Quantidade de parcelas">
@@ -2572,8 +2647,7 @@ export const GlobalModals: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
+            </div>
             <FormActions
               onCancel={closeFineModal}
               label={editingFineId ? 'Salvar alterações' : fineForm.tipoLancamento === 'NIC' ? 'Salvar NIC' : 'Salvar multa'}

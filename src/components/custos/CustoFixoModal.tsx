@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Field, FormActions, Modal } from '@/components/ui';
-import { CATEGORIAS_CUSTO_FIXO, validarCustoFixo } from '@/services/custosFixosService';
+import { addMesesYM, CATEGORIAS_CUSTO_FIXO, validarCustoFixo } from '@/services/custosFixosService';
 import { localToday } from '@/services/financeiroLocal';
 import type { CategoriaCustoFixo, CustoFixo, Veiculo } from '@/types/frotawise';
 
@@ -24,7 +24,10 @@ export function CustoFixoModal({ vehicles, custo, defaultVeiculoId = '', onSave,
     diaVencimento: custo ? String(custo.diaVencimento) : '10',
     inicio: custo?.inicio ?? localToday().slice(0, 7),
     fim: custo?.fim ?? '',
+    parcelas: custo?.fim ? String(Math.max(1, (Number(custo.fim.slice(0, 4)) - Number((custo.inicio || '').slice(0, 4))) * 12 + Number(custo.fim.slice(5, 7)) - Number((custo.inicio || '').slice(5, 7)) + 1)) : '',
     ativo: custo?.ativo ?? true,
+    integrarFinanceiro: custo?.integrarFinanceiro !== false,
+    formaPagamento: custo?.formaPagamento ?? 'Boleto',
     obs: custo?.obs ?? '',
   });
 
@@ -36,7 +39,7 @@ export function CustoFixoModal({ vehicles, custo, defaultVeiculoId = '', onSave,
       valorMensal: Number(f.valorMensal),
       diaVencimento: Number(f.diaVencimento),
       inicio: f.inicio,
-      fim: f.fim || null,
+      fim: f.parcelas !== '' && Number(f.parcelas) >= 1 ? addMesesYM(f.inicio, Math.max(1, Math.min(600, Math.trunc(Number(f.parcelas)))) - 1) : (f.fim || null),
     };
     const erro = validarCustoFixo(draft);
     if (erro) return onError(erro);
@@ -45,6 +48,8 @@ export function CustoFixoModal({ vehicles, custo, defaultVeiculoId = '', onSave,
       ...draft,
       categoria: f.categoria,
       ativo: f.ativo,
+      integrarFinanceiro: f.integrarFinanceiro,
+      formaPagamento: f.formaPagamento,
       obs: f.obs.trim(),
     });
   };
@@ -109,22 +114,43 @@ export function CustoFixoModal({ vehicles, custo, defaultVeiculoId = '', onSave,
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Início (mês)">
-            <input required type="month" className="inp mono" value={f.inicio} onChange={(e) => setF({ ...f, inicio: e.target.value })} />
+            <input required type="month" className="inp mono" value={f.inicio} onChange={(e) => {
+              const inicio = e.target.value; const count = Number(f.parcelas);
+              setF({ ...f, inicio, fim: f.parcelas && count >= 1 ? addMesesYM(inicio, Math.max(1, Math.min(600, Math.trunc(count))) - 1) : f.fim });
+            }} />
           </Field>
-          <Field label="Fim (opcional)">
-            <input type="month" className="inp mono" value={f.fim} onChange={(e) => setF({ ...f, fim: e.target.value })} />
+          <Field label="Quantidade de parcelas (meses)">
+            <input type="number" min="1" max="600" step="1" placeholder="Sem limite" className="inp mono" value={f.parcelas} onChange={(e) => {
+              const parcelas = e.target.value; const count = Number(parcelas);
+              setF({ ...f, parcelas, fim: parcelas && Number.isFinite(count) && count >= 1 ? addMesesYM(f.inicio, Math.max(1, Math.min(600, Math.trunc(count))) - 1) : '' });
+            }} />
           </Field>
         </div>
+        <Field label="Data fim (calculada pelas parcelas; pode ajustar manualmente)">
+          <input type="month" className="inp mono" value={f.fim} onChange={(e) => {
+            const fim = e.target.value;
+            const count = fim && f.inicio ? Math.max(1, (Number(fim.slice(0, 4)) - Number(f.inicio.slice(0, 4))) * 12 + Number(fim.slice(5, 7)) - Number(f.inicio.slice(5, 7)) + 1) : '';
+            setF({ ...f, fim, parcelas: String(count) });
+          }} />
+        </Field>
+        <Field label="Forma de pagamento">
+          <select className="inp" value={f.formaPagamento} onChange={(e) => setF({ ...f, formaPagamento: e.target.value })}>
+            <option>Boleto</option><option>Pix</option><option>Transferência</option><option>Débito automático</option><option>Cartão</option><option>Dinheiro</option><option>Outro</option>
+          </select>
+        </Field>
+        <label className="flex items-center gap-2 ef-t13">
+          <input type="checkbox" checked={f.integrarFinanceiro} onChange={(e) => setF({ ...f, integrarFinanceiro: e.target.checked })} />
+          Integrar com o Financeiro
+        </label>
         <label className="flex items-center gap-2 ef-t13">
           <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />
-          Custo ativo (lança todo mês no Financeiro)
+          Custo ativo
         </label>
         <Field label="Observações">
           <input className="inp" value={f.obs} onChange={(e) => setF({ ...f, obs: e.target.value })} />
         </Field>
         <p className="ef-t12" style={{ color: 'var(--mute)' }}>
-          Cada mês vira um pagamento no Financeiro, com vencimento no dia escolhido. Sem mês final, o custo segue
-          lançando mês a mês.
+          Quando integrado, cada mês vira uma parcela no Financeiro, com o vencimento no dia escolhido. Informe a quantidade para calcular automaticamente o mês final; deixe em branco para manter recorrência sem fim.
         </p>
         <FormActions onCancel={onClose} label={custo ? 'Salvar alterações' : 'Salvar custo fixo'} v="primary" />
       </form>

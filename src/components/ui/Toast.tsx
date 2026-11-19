@@ -28,7 +28,7 @@ export function Toast({ variant = 'info', message, onClose }: ToastProps) {
       role={variant === 'error' ? 'alert' : 'status'}
       aria-live={variant === 'error' ? 'assertive' : 'polite'}
       aria-atomic="true"
-      className={`${leaving ? 'ef-toast-out' : 'ef-toast'} ef-notice ef-notice-${variant} fixed bottom-4 right-4 z-[70] flex items-start gap-3 rounded-xl border px-4 py-3 shadow-xl`}
+      className={`${leaving ? 'ef-toast-out' : 'ef-toast'} ef-notice ef-notice-${variant} fixed bottom-4 right-4 z-[120] flex items-start gap-3 rounded-xl border px-4 py-3 shadow-xl`}
     >
       <Icon size={20} aria-hidden="true" className="shrink-0 mt-0.5" />
       <span className="flex-1 text-sm leading-relaxed break-words">{message}</span>

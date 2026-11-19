@@ -216,6 +216,9 @@ export interface CustoFixo {
   /** Última competência (AAAA-MM). Vazio = sem data para terminar. */
   fim: string | null;
   ativo: boolean;
+  /** Exibe ou não as competências no Financeiro. */
+  integrarFinanceiro?: boolean;
+  formaPagamento?: string;
   obs?: string;
 }
 
@@ -225,6 +228,8 @@ export interface PagamentoPlano {
   origemId: string;
   forma: 'avista' | 'parcelado';
   parcelas: number;
+  /** Meio utilizado para pagamento (Boleto, Pix, Cartão etc.). */
+  meioPagamento?: string;
   vencimento: string;
   pagas: Record<string, string>;
 }
@@ -256,6 +261,7 @@ export interface Abastecimento {
 export interface ItemViagem {
   id: string;
   descricao: string;
+  quantidade?: number;
   valor: number;
 }
 

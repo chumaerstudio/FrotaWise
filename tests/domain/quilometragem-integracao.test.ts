@@ -305,6 +305,7 @@ describe('Custo fixo por veículo ↔ Financeiro', () => {
   });
   it('respeita o mês final e custo inativo não gera meses futuros', () => {
     expect(competenciasDoCusto(custo({ fim: '2026-10' }), '2026-11-12')).toEqual(['2026-09', '2026-10']);
+    expect(competenciasDoCusto(custo({ fim: '2027-03' }), '2026-11-12')).toEqual(['2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03']);
     expect(competenciasDoCusto(custo({ ativo: false }), '2026-11-12')).toEqual(['2026-09', '2026-10', '2026-11']);
   });
   it('vencimento no dia 31 cai no último dia de meses curtos', () => {

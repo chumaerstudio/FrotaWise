@@ -46,6 +46,7 @@ import {
   SectionHead,
 } from '@/components/ui';
 import type { ContaPagar, PagamentoPlano, TipoFinanceiro } from '@/types/frotawise';
+import { totalItensViagem, totalDespesasViagem } from '@/services/viagensService';
 import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 
 const TONE: Record<TipoFinanceiro, 'teal' | 'blue' | 'red' | 'amber' | 'gray'> = {
@@ -88,6 +89,7 @@ export default function FinanceiroPage() {
   const searchParams = useSearchParams();
   const {
     vehicles,
+    trips,
     tires,
     maintenances,
     fines,
@@ -360,13 +362,14 @@ export default function FinanceiroPage() {
     if (liveMode) {
       void runLiveMutation('put', '/financeiro/pagamentos', planPayload({
         origem: payEdit.origem, origemId: payEdit.origemId,
-        forma: parcelado ? 'parcelado' : 'avista', parcelas, vencimento: payForm.vencimento,
+        forma: parcelado ? 'parcelado' : 'avista', meioPagamento: current?.meioPagamento || 'Boleto', parcelas, vencimento: payForm.vencimento,
         pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
       }), 'Plano atualizado.').then((ok) => { if (ok) setPayEdit(null); });
       return;
     }
     upsertPlan(payEdit.origem, payEdit.origemId, {
       forma: parcelado ? 'parcelado' : 'avista',
+      meioPagamento: current?.meioPagamento || 'Boleto',
       parcelas,
       vencimento: payForm.vencimento,
       pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
@@ -380,6 +383,7 @@ export default function FinanceiroPage() {
     hoje.slice(0, 7),
     ...finItems.map((item) => item.vencimento.slice(0, 7)),
     ...finItems.filter((item) => item.pagoEm).map((item) => (item.pagoEm as string).slice(0, 7)),
+    ...trips.map((trip) => String(trip.data || '').slice(0, 7)).filter((ym) => /^\d{4}-\d{2}$/.test(ym)),
   ])].sort().reverse();
   const noPeriodo = (iso: string) => periodo === 'todos' || String(iso).slice(0, 7) === periodo;
   const itens = finItems.filter((item) => (item.pagoEm ? noPeriodo(item.pagoEm) : noPeriodo(item.vencimento)));
@@ -393,6 +397,11 @@ export default function FinanceiroPage() {
     (a.pagoEm as string) < (b.pagoEm as string) ? 1 : (a.pagoEm as string) > (b.pagoEm as string) ? -1 : b.valor - a.valor
   );
   const soma = (list: ItemFinanceiro[]) => list.reduce((sum, item) => sum + item.valor, 0);
+  const viagensPeriodo = trips.filter((trip) => noPeriodo(trip.data)).sort((a, b) => b.data.localeCompare(a.data) || b.numero - a.numero);
+  const faturamentoViagens = viagensPeriodo.reduce((sum, trip) => sum + totalItensViagem(trip), 0);
+  const despesasManuaisViagens = trips.reduce((sum, trip) => sum + trip.despesas.filter((expense) => expense.origem === 'manual' && noPeriodo(expense.data)).reduce((partial, expense) => partial + (Number(expense.valor) || 0), 0), 0);
+  const despesasFinanceiras = soma(itens) + despesasManuaisViagens;
+  const resultadoFinanceiro = faturamentoViagens - despesasFinanceiras;
   const resumo = TIPOS_FINANCEIRO.map((tipo) => {
     const lista = itens.filter((item) => item.tipo === tipo);
     const av = lista.filter((item) => !item.pagoEm && item.vencimento >= hoje);
@@ -415,11 +424,12 @@ export default function FinanceiroPage() {
   const actionsFor = (item: ItemFinanceiro, isPaid = false) => (
     <div className="ef-fin-actions flex items-center justify-end gap-2 whitespace-nowrap">
       {isPaid ? <Chip tone="teal">Pago</Chip> : <Btn sm v="primary" className="btn-pill" onClick={() => setConfirmPayment(item)}>Marcar como pago</Btn>}
+      {item.origem === 'conta' && <Btn sm v="danger" icon={Trash2} title="Excluir conta" aria-label={`Excluir conta ${item.descricao}`} onClick={() => setDeletingConta(contas.find(c => c.id === item.origemId) || null)}>Excluir</Btn>}
       <RowActionsMenu label={`Ações do pagamento ${item.descricao}`} actions={[
         { label: 'Ver detalhes', icon: Eye, onClick: () => setDetailPayment(item) },
         ...(!isPaid ? [{ label: 'Editar pagamento', icon: Pencil, onClick: () => openPayEdit(item) }] : []),
         ...(isPaid ? [{ label: 'Desfazer pagamento', icon: Undo2, onClick: () => undoPayItem(item) }] : []),
-        ...(!isPaid && item.origem === 'conta' ? [{ label: 'Excluir conta', icon: Trash2, danger: true, onClick: () => setDeletingConta(contas.find(c => c.id === item.origemId) || null) }] : []),
+        ...(item.origem === 'conta' ? [{ label: 'Excluir conta', icon: Trash2, danger: true, onClick: () => setDeletingConta(contas.find(c => c.id === item.origemId) || null) }] : []),
       ]} />
     </div>
   );
@@ -457,6 +467,26 @@ export default function FinanceiroPage() {
         <Kpi label="Total pago" value={soma(pagos)} fmt={formatCurrency} icon={CheckCircle2} tone={{ bg: 'var(--teal-soft)', fg: 'var(--teal-ink)' }} sub="Baixas registradas" delay={70} />
         <Kpi label="Total vencido" value={soma(vencidos)} fmt={formatCurrency} icon={AlertTriangle} tone={{ bg: 'var(--red-soft)', fg: 'var(--red-ink)' }} sub={`${vencidos.length} parcela(s) em atraso`} delay={140} />
         <Kpi label="Lançamentos" value={itens.length} fmt={(n) => formatNumber(Math.round(n))} icon={Calendar} tone={{ bg: 'var(--soft)', fg: 'var(--ink)' }} sub="Parcelas no período" delay={210} />
+      </div>
+
+      <div className="card p-4 space-y-3 ef-rise">
+        <SectionHead title="Lucro e despesas do período" sub="Faturamento informado nas viagens menos as despesas lançadas no Financeiro." />
+        <div className="ef-g-kpi ef-fin-kpis">
+          <Kpi label="Faturamento das viagens" value={faturamentoViagens} fmt={formatCurrency} icon={DollarSign} tone={{ bg: 'var(--teal-soft)', fg: 'var(--teal-ink)' }} sub={`${viagensPeriodo.length} viagem(ns) no período`} />
+          <Kpi label="Despesas financeiras" value={despesasFinanceiras} fmt={formatCurrency} icon={Wallet} tone={{ bg: 'var(--red-soft)', fg: 'var(--red-ink)' }} sub="Contas, parcelas, lançamentos e despesas manuais das viagens" />
+          <Kpi label="Resultado (lucro)" value={resultadoFinanceiro} fmt={formatCurrency} icon={CheckCircle2} tone={{ bg: resultadoFinanceiro >= 0 ? 'var(--teal-soft)' : 'var(--red-soft)', fg: resultadoFinanceiro >= 0 ? 'var(--teal-ink)' : 'var(--red-ink)' }} sub="Faturamento − despesas" />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="tbl ef-compact">
+            <thead><tr><th>Viagem</th><th>Data</th><th>Trajeto</th><th className="ef-tr">Faturamento</th><th className="ef-tr">Saldo da viagem</th></tr></thead>
+            <tbody>
+              {viagensPeriodo.length ? viagensPeriodo.map((trip) => {
+                const receita = totalItensViagem(trip); const saldo = receita - totalDespesasViagem(trip);
+                return <tr key={trip.id}><td className="font-semibold">Nº {trip.numero}</td><td className="mono">{formatDateBR(trip.data)}</td><td>{trip.origem || '—'} → {trip.destino || '—'}</td><td className="mono text-right font-semibold">{formatCurrency(receita)}</td><td className="mono text-right" style={{ color: saldo >= 0 ? 'var(--teal-ink)' : 'var(--red-ink)' }}>{formatCurrency(saldo)}</td></tr>;
+              }) : <tr><td colSpan={5} className="text-center" style={{ color: 'var(--mute)' }}>Nenhum faturamento de viagem neste período.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div id="financeiro-a-vencer" className="card overflow-hidden ef-rise ef-fin-card ef-scroll-anchor">
