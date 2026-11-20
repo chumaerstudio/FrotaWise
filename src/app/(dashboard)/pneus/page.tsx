@@ -20,7 +20,7 @@ import { formatNumber, today } from '@/services/api';
 import { registrarMovimentacao } from '@/services/pneuKmService';
 import { api39Error } from '@/services/operacional39Service';
 import { getTireLimits, getTireKmStageStyle, getTireKmStageLegend } from '@/services/pneusService';
-import { getVehicleChassisSlots } from '@/services/veiculosService';
+import { getVehicleChassisSlots, normalizeChassisSlotCode } from '@/services/veiculosService';
 import { Btn, Chip, Empty, Field, FormActions, Modal, SectionHead, TireChip, cx } from '@/components/ui';
 import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 import { ChassisView } from '@/components/chassis/ChassisView';
@@ -56,7 +56,7 @@ export default function PneusHubPage() {
 
   const activeVehicle =
     vehicles.find((v) => v.id === selectedChassisVehicleId) || vehicles[0];
-  const layout = activeVehicle ? getVehicleChassisSlots(activeVehicle.eixos) : null;
+  const layout = activeVehicle ? getVehicleChassisSlots(activeVehicle.eixos, activeVehicle.categoria) : null;
   const mounted = activeVehicle
     ? tires.filter((t) => t.veiculoAtualId === activeVehicle.id)
     : [];
@@ -73,7 +73,7 @@ export default function PneusHubPage() {
   const freeSlots = layout ? [
     ...layout.axles.flatMap(axle => [...axle.leftSlots, ...axle.rightSlots]),
     layout.spareSlot,
-  ].filter(slot => !mounted.some(t => t.posicaoAtual === slot.code)) : [];
+  ].filter(slot => !mounted.some(t => normalizeChassisSlotCode(t.posicaoAtual, activeVehicle?.categoria) === slot.code)) : [];
   const openSlotPicker = () => {
     setSelectedSlotCode(freeSlots[0]?.code || '');
     setSlotPickerOpen(true);
@@ -113,7 +113,8 @@ export default function PneusHubPage() {
     if (!Number.isFinite(kmSource) || kmSource < Number(source.kmTotal || 0)) { showToast(`O KM final do pneu #${source.fogo} não pode ser menor que o KM acumulado atual.`, 'error'); return; }
     if (!Number.isFinite(kmTarget) || kmTarget < Number(target.kmTotal || 0)) { showToast(`O KM final do pneu #${target.fogo} não pode ser menor que o KM acumulado atual.`, 'error'); return; }
     if (kmVehicle !== null && (!Number.isFinite(kmVehicle) || kmVehicle < Number(activeVehicle.kmAtual || 0))) { showToast('O KM do veículo não pode ser menor que o hodômetro atual.', 'error'); return; }
-    const sourcePos = source.posicaoAtual; const targetPos = target.posicaoAtual;
+    const sourcePos = normalizeChassisSlotCode(source.posicaoAtual, activeVehicle.categoria);
+    const targetPos = normalizeChassisSlotCode(target.posicaoAtual, activeVehicle.categoria);
     const sourceDelta = kmSource - Number(source.kmTotal || 0); const targetDelta = kmTarget - Number(target.kmTotal || 0);
     if (liveMode) {
       try {
@@ -168,7 +169,7 @@ export default function PneusHubPage() {
   };
 
   const renderSlot = (slot: { code: string; label: string }) => {
-    const mt = mounted.find((t) => t.posicaoAtual === slot.code);
+    const mt = mounted.find((t) => normalizeChassisSlotCode(t.posicaoAtual, activeVehicle?.categoria) === slot.code);
     if (mt) {
       return (
         <TireChip

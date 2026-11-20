@@ -254,7 +254,7 @@ describe('Cores de status', () => {
 });
 
 // ===== Chassi (Bitruck), Custo Fixo e Financeiro =====
-import { getVehicleChassisSlots, migrarPosicoesLegadasBitruck, singleAxleCount } from '@/services/veiculosService';
+import { getVehicleChassisSlots, migrarPosicoesLegadasBitruck, normalizeChassisSlotCode, singleAxleCount } from '@/services/veiculosService';
 import { competenciasDoCusto, totalMensalVigente, vencimentoDaCompetencia, validarCustoFixo } from '@/services/custosFixosService';
 import { buildPayables } from '@/services/financeiroLocal';
 import { getChassisAsset } from '@/services/chassisAssets';
@@ -277,14 +277,33 @@ describe('Chassi do Bitruck (4 eixos)', () => {
     expect(singleAxleCount(3)).toBe(1);
     expect(singleAxleCount(4)).toBe(2);
   });
+  it('carretas usam rodado duplo em todos os eixos, inclusive o primeiro', () => {
+    const layout = getVehicleChassisSlots(3, 'Carreta');
+    expect(layout.axles.map((axle) => axle.single)).toEqual([false, false, false]);
+    expect(layout.axles.every((axle) => axle.leftSlots.length === 2 && axle.rightSlots.length === 2)).toBe(true);
+    expect(layout.axles[0].rightSlots.map((slot) => slot.code).sort()).toEqual(['E1-DE', 'E1-DI']);
+    expect(layout.axles[0].leftSlots.map((slot) => slot.code).sort()).toEqual(['E1-EE', 'E1-EI']);
+  });
+  it('mantém pneus legados do primeiro eixo visíveis nas posições externas da carreta', () => {
+    expect(normalizeChassisSlotCode('E1-DIR', 'CARRETAS')).toBe('E1-DE');
+    expect(normalizeChassisSlotCode('E1-ESQ', 'Carreta')).toBe('E1-EE');
+    expect(normalizeChassisSlotCode('E1-DIR', 'Cavalo Trucado')).toBe('E1-DIR');
+  });
   it('cada configuração tem imagem com um centro por eixo', () => {
     for (const n of [2, 3, 4, 5, 6]) expect(getChassisAsset(n).axles).toHaveLength(n);
   });
-  it('migra dados antigos: externos reposicionam, internos do 2º eixo vão ao estoque', () => {
-    const veh = [{ id: 'b', eixos: 4 }, { id: 'o', eixos: 3 }] as unknown as Veiculo[];
+  it('migra dados antigos do Bitruck, sem alterar posições de carretas', () => {
+    const veh = [
+      { id: 'b', eixos: 4, categoria: 'Bitruck' },
+      { id: 'o', eixos: 3, categoria: 'Cavalo' },
+      { id: 'c', eixos: 4, categoria: 'Carreta' },
+    ] as unknown as Veiculo[];
     const t = (id: string, v: string, pos: string) => pneu({ id, veiculoAtualId: v, posicaoAtual: pos });
-    const r = migrarPosicoesLegadasBitruck(veh, [t('1', 'b', 'E2-EE'), t('2', 'b', 'E2-DE'), t('3', 'b', 'E2-EI'), t('4', 'b', 'E3-EE'), t('5', 'o', 'E2-EE')]);
-    expect(r.tires.map((x) => x.posicaoAtual)).toEqual(['E2-ESQ', 'E2-DIR', '', 'E3-EE', 'E2-EE']);
+    const r = migrarPosicoesLegadasBitruck(veh, [
+      t('1', 'b', 'E2-EE'), t('2', 'b', 'E2-DE'), t('3', 'b', 'E2-EI'),
+      t('4', 'b', 'E3-EE'), t('5', 'o', 'E2-EE'), t('6', 'c', 'E2-EE'),
+    ]);
+    expect(r.tires.map((x) => x.posicaoAtual)).toEqual(['E2-ESQ', 'E2-DIR', '', 'E3-EE', 'E2-EE', 'E2-EE']);
     expect(r.tires[2].classificacao).toBe('Estocar');
     expect(r.tires[2].kmTotal).toBe(10000);
   });

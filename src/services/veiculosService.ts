@@ -13,6 +13,7 @@ import type { VeiculoApiDTO } from '@/types/domain';
 import { httpClient } from '@/lib/http/client';
 import { normalizeApiError } from '@/lib/errors';
 import { mapVeiculoDtoToViewModel } from '@/lib/mappers';
+import { isCarretaCategory } from '@/services/chassisAssets';
 
 export const INITIAL_VEHICLES: Veiculo[] = [
   {
@@ -169,9 +170,14 @@ export interface VehicleChassisLayout {
 export const singleAxleCount = (eixos: number): number => (Math.trunc(Number(eixos)) === 4 ? 2 : 1);
 
 /** Retorna o mapa visual do chassi usado pela tela de pneus. */
-export function getVehicleChassisSlots(eixos: number): VehicleChassisLayout {
+export function getVehicleChassisSlots(
+  eixos: number,
+  categoria?: string | null
+): VehicleChassisLayout {
   const n = Math.max(2, Math.min(6, Math.trunc(Number(eixos) || 3)));
-  const singles = singleAxleCount(n);
+  // Carretas usam rodado duplo em todos os eixos; as demais categorias
+  // preservam integralmente a regra atual de cavalos/bitrucks.
+  const singles = isCarretaCategory(categoria) ? 0 : singleAxleCount(n);
   const axles: ChassisAxleLayout[] = [];
 
   for (let i = 1; i <= n; i++) {
@@ -201,6 +207,22 @@ export function getVehicleChassisSlots(eixos: number): VehicleChassisLayout {
   return { spareSlot: { code: 'ESTEPE-1', label: 'Estepe Chassi' }, axles };
 }
 
+/**
+ * Compatibilidade com pneus que já estavam montados no 1º eixo da carreta
+ * antes da adoção de posições duplas (E1-DIR/E1-ESQ).
+ * Eles passam a ser representados nas posições externas do novo rodado duplo.
+ */
+export function normalizeChassisSlotCode(
+  position: string | null | undefined,
+  categoria?: string | null
+): string {
+  const code = String(position || '').trim();
+  if (!isCarretaCategory(categoria)) return code;
+  if (code === 'E1-DIR') return 'E1-DE';
+  if (code === 'E1-ESQ') return 'E1-EE';
+  return code;
+}
+
 function getValidSlotCodes(layout: VehicleChassisLayout): Set<string> {
   return new Set([
     layout.spareSlot.code,
@@ -220,7 +242,11 @@ export function migrarPosicoesLegadasBitruck(
   vehicles: Veiculo[],
   tires: Pneu[]
 ): { tires: Pneu[]; remapeados: Pneu[]; estocados: Pneu[] } {
-  const bitrucks = new Set(vehicles.filter((v) => singleAxleCount(v.eixos) === 2).map((v) => v.id));
+  const bitrucks = new Set(
+    vehicles
+      .filter((v) => !isCarretaCategory(v.categoria) && singleAxleCount(v.eixos) === 2)
+      .map((v) => v.id)
+  );
   const remap: Record<string, string> = { 'E2-EE': 'E2-ESQ', 'E2-DE': 'E2-DIR' };
   const orfaos = new Set(['E2-EI', 'E2-DI']);
   const remapeados: Pneu[] = [];
@@ -251,9 +277,10 @@ export function migrarPosicoesLegadasBitruck(
 export function findOrphanedTiresOnAxleChange(
   veiculoId: string,
   novosEixos: number,
-  tires: Pneu[]
+  tires: Pneu[],
+  categoria?: string | null
 ): Pneu[] {
-  const validSlots = getValidSlotCodes(getVehicleChassisSlots(novosEixos));
+  const validSlots = getValidSlotCodes(getVehicleChassisSlots(novosEixos, categoria));
   return tires.filter(
     (t) =>
       t.veiculoAtualId === veiculoId &&
@@ -583,7 +610,8 @@ export const veiculosService = {
       const orfaos = findOrphanedTiresOnAxleChange(
         id,
         payload.eixos,
-        mountedTires
+        mountedTires,
+        payload.categoria
       );
       if (orfaos.length > 0) {
         throw new Error(
