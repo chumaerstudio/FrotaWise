@@ -74,6 +74,7 @@ const EMPTY_CONTA = () => ({
   fornecedor: '',
   valor: '',
   forma: 'avista' as 'avista' | 'parcelado',
+  meioPagamento: 'Boleto',
   parcelas: '2',
   vencimento: localToday(),
 });
@@ -108,7 +109,7 @@ export default function FinanceiroPage() {
   const [abaAvisos, setAbaAvisos] = useState<'vencidos' | 'pagos'>('vencidos');
   const [expandirAvisos, setExpandirAvisos] = useState(false);
   const [payEdit, setPayEdit] = useState<Pick<ItemFinanceiro, 'origem' | 'origemId' | 'tipo' | 'descricao' | 'total'> | null>(null);
-  const [payForm, setPayForm] = useState({ forma: 'avista' as 'avista' | 'parcelado', parcelas: '2', vencimento: '' });
+  const [payForm, setPayForm] = useState({ forma: 'avista' as 'avista' | 'parcelado', meioPagamento: 'Boleto', parcelas: '2', vencimento: '' });
   const [contaAberta, setContaAberta] = useState(false);
   const [editingContaId, setEditingContaId] = useState<string | null>(null);
   const [contaForm, setContaForm] = useState(EMPTY_CONTA());
@@ -213,6 +214,7 @@ export default function FinanceiroPage() {
   };
 
   const openPayEdit = (item: ItemFinanceiro) => {
+    const current = planOf(item);
     setPayEdit({
       origem: item.origem,
       origemId: item.origemId,
@@ -222,6 +224,7 @@ export default function FinanceiroPage() {
     });
     setPayForm({
       forma: item.forma,
+      meioPagamento: current?.meioPagamento || 'Boleto',
       parcelas: item.forma === 'parcelado' ? String(item.parcelas) : '2',
       vencimento: item.primeiroVenc,
     });
@@ -246,6 +249,7 @@ export default function FinanceiroPage() {
       fornecedor: conta.fornecedor || '',
       valor: String(conta.valor),
       forma: plan?.forma === 'parcelado' ? 'parcelado' : 'avista',
+      meioPagamento: plan?.meioPagamento || 'Boleto',
       parcelas: String(plan?.forma === 'parcelado' ? plan.parcelas : 2),
       vencimento: plan?.vencimento || conta.data,
     });
@@ -272,6 +276,7 @@ export default function FinanceiroPage() {
     };
     const plano = {
       forma: parcelado ? 'parcelado' as const : 'avista' as const,
+      meioPagamento: contaForm.meioPagamento || 'Boleto',
       parcelas,
       vencimento: contaForm.vencimento,
     };
@@ -362,14 +367,14 @@ export default function FinanceiroPage() {
     if (liveMode) {
       void runLiveMutation('put', '/financeiro/pagamentos', planPayload({
         origem: payEdit.origem, origemId: payEdit.origemId,
-        forma: parcelado ? 'parcelado' : 'avista', meioPagamento: current?.meioPagamento || 'Boleto', parcelas, vencimento: payForm.vencimento,
+        forma: parcelado ? 'parcelado' : 'avista', meioPagamento: payForm.meioPagamento || 'Boleto', parcelas, vencimento: payForm.vencimento,
         pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
       }), 'Plano atualizado.').then((ok) => { if (ok) setPayEdit(null); });
       return;
     }
     upsertPlan(payEdit.origem, payEdit.origemId, {
       forma: parcelado ? 'parcelado' : 'avista',
-      meioPagamento: current?.meioPagamento || 'Boleto',
+      meioPagamento: payForm.meioPagamento || 'Boleto',
       parcelas,
       vencimento: payForm.vencimento,
       pagas: Object.fromEntries(Object.entries(current?.pagas || {}).filter(([index]) => Number(index) < parcelas)),
@@ -379,11 +384,12 @@ export default function FinanceiroPage() {
   };
 
   const hoje = localToday();
+  const isYM = (ym: string) => /^\d{4}-\d{2}$/.test(ym);
   const periodos = [...new Set([
     hoje.slice(0, 7),
-    ...finItems.map((item) => item.vencimento.slice(0, 7)),
-    ...finItems.filter((item) => item.pagoEm).map((item) => (item.pagoEm as string).slice(0, 7)),
-    ...trips.map((trip) => String(trip.data || '').slice(0, 7)).filter((ym) => /^\d{4}-\d{2}$/.test(ym)),
+    ...finItems.map((item) => String(item.vencimento || '').slice(0, 7)).filter(isYM),
+    ...finItems.filter((item) => item.pagoEm).map((item) => String(item.pagoEm || '').slice(0, 7)).filter(isYM),
+    ...trips.map((trip) => String(trip.data || '').slice(0, 7)).filter(isYM),
   ])].sort().reverse();
   const noPeriodo = (iso: string) => periodo === 'todos' || String(iso).slice(0, 7) === periodo;
   const itens = finItems.filter((item) => (item.pagoEm ? noPeriodo(item.pagoEm) : noPeriodo(item.vencimento)));
@@ -471,7 +477,7 @@ export default function FinanceiroPage() {
 
       <div className="card p-4 space-y-3 ef-rise">
         <SectionHead title="Lucro e despesas do período" sub="Faturamento informado nas viagens menos as despesas lançadas no Financeiro." />
-        <div className="ef-g-kpi ef-fin-kpis">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 ef-fin-kpis">
           <Kpi label="Faturamento das viagens" value={faturamentoViagens} fmt={formatCurrency} icon={DollarSign} tone={{ bg: 'var(--teal-soft)', fg: 'var(--teal-ink)' }} sub={`${viagensPeriodo.length} viagem(ns) no período`} />
           <Kpi label="Despesas financeiras" value={despesasFinanceiras} fmt={formatCurrency} icon={Wallet} tone={{ bg: 'var(--red-soft)', fg: 'var(--red-ink)' }} sub="Contas, parcelas, lançamentos e despesas manuais das viagens" />
           <Kpi label="Resultado (lucro)" value={resultadoFinanceiro} fmt={formatCurrency} icon={CheckCircle2} tone={{ bg: resultadoFinanceiro >= 0 ? 'var(--teal-soft)' : 'var(--red-soft)', fg: resultadoFinanceiro >= 0 ? 'var(--teal-ink)' : 'var(--red-ink)' }} sub="Faturamento − despesas" />
@@ -631,10 +637,15 @@ export default function FinanceiroPage() {
           <form onSubmit={savePayEdit} className="space-y-3">
             <div className="flex flex-wrap items-center gap-2"><Chip tone={TONE[payEdit.tipo]}>{payEdit.tipo}</Chip><b>{payEdit.descricao}</b></div>
             <div className="ef-t13" style={{ color: 'var(--mute)' }}>Valor total: <b className="mono">{formatCurrency(payEdit.total)}</b></div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Forma de pagamento">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Condição de pagamento">
                 <select className="inp" value={payForm.forma} onChange={(e) => setPayForm({ ...payForm, forma: e.target.value as 'avista' | 'parcelado' })}>
                   <option value="avista">À vista</option><option value="parcelado">Parcelado</option>
+                </select>
+              </Field>
+              <Field label="Meio de pagamento">
+                <select className="inp" value={payForm.meioPagamento} onChange={(e) => setPayForm({ ...payForm, meioPagamento: e.target.value })}>
+                  <option>Boleto</option><option>Pix</option><option>Transferência</option><option>Débito automático</option><option>Cartão</option><option>Dinheiro</option><option>Outro</option>
                 </select>
               </Field>
               <Field label="Quantidade de parcelas">
@@ -672,9 +683,10 @@ export default function FinanceiroPage() {
             </Field>
             <Field label="Descrição da conta"><input required className="inp" value={contaForm.descricao} onChange={(e) => setContaForm({ ...contaForm, descricao: e.target.value })} /></Field>
             <Field label="Fornecedor / favorecido (opcional)"><input className="inp" value={contaForm.fornecedor} onChange={(e) => setContaForm({ ...contaForm, fornecedor: e.target.value })} /></Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <Field label="Valor total (R$)"><input type="number" min="0.01" step="0.01" required className="inp mono" value={contaForm.valor} onChange={(e) => setContaForm({ ...contaForm, valor: e.target.value })} /></Field>
-              <Field label="Forma de pagamento"><select className="inp" value={contaForm.forma} onChange={(e) => setContaForm({ ...contaForm, forma: e.target.value as 'avista' | 'parcelado' })}><option value="avista">À vista</option><option value="parcelado">Parcelado</option></select></Field>
+              <Field label="Condição"><select className="inp" value={contaForm.forma} onChange={(e) => setContaForm({ ...contaForm, forma: e.target.value as 'avista' | 'parcelado' })}><option value="avista">À vista</option><option value="parcelado">Parcelado</option></select></Field>
+              <Field label="Meio de pagamento"><select className="inp" value={contaForm.meioPagamento} onChange={(e) => setContaForm({ ...contaForm, meioPagamento: e.target.value })}><option>Boleto</option><option>Pix</option><option>Transferência</option><option>Débito automático</option><option>Cartão</option><option>Dinheiro</option><option>Outro</option></select></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Quantidade de parcelas"><input type="number" min="2" max="48" disabled={contaForm.forma !== 'parcelado'} className="inp mono" value={contaForm.forma === 'parcelado' ? contaForm.parcelas : 1} onChange={(e) => setContaForm({ ...contaForm, parcelas: e.target.value })} /></Field>

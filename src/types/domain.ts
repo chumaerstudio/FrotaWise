@@ -27,6 +27,10 @@ export interface AuthenticatedUserDTO {
   papel: PapelUsuario;
   tenantId: string;
   nomeEmpresa: string;
+  limiteVeiculos?: number | null;
+  limiteVeiculosEmpresa?: number | null;
+  veiculosCadastrados?: number;
+  veiculosEmpresa?: number;
   capabilities: UserCapabilities;
 }
 

@@ -10,7 +10,7 @@ import { Btn, Chip, Empty, Field, FormActions, Modal, PageSkeleton, SectionHead 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
 
-type User = { id: string; nome: string; email: string; role: 'ADMIN' | 'OPERADOR' | 'DIRETOR'; ativo: boolean; permitirIpExterno: boolean };
+type User = { id: string; nome: string; email: string; role: 'ADMIN' | 'OPERADOR' | 'DIRETOR'; ativo: boolean; permitirIpExterno: boolean; limiteVeiculos?: number | null };
 const ROLE_NAMES: Record<User['role'], string> = { ADMIN: 'Administrador', DIRETOR: 'Diretor', OPERADOR: 'Operador' };
 const ROLE_DESCRIPTIONS: Record<User['role'], string> = {
   ADMIN: 'Gerencia contas, acessos e configurações da empresa.',
@@ -28,9 +28,10 @@ export default function UsuariosPage() {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ nome: '', email: '', password: '', role: 'OPERADOR' as User['role'] });
+  const [form, setForm] = useState({ nome: '', email: '', password: '', role: 'OPERADOR' as User['role'], limiteVeiculos: '' });
   const [editing, setEditing] = useState<User | null>(null);
   const [roleDraft, setRoleDraft] = useState<User['role']>('OPERADOR');
+  const [limitDraft, setLimitDraft] = useState('');
   const [resetUser, setResetUser] = useState<User | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [statusUser, setStatusUser] = useState<User | null>(null);
@@ -54,11 +55,31 @@ export default function UsuariosPage() {
     catch (error) { showToast(friendlyError(error), 'error'); return false; }
     finally { setBusy(false); }
   };
+  const parseVehicleLimit = (raw: string): number | null | 'invalid' => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || parsed < 0) return 'invalid';
+    return parsed;
+  };
   const create = async (event: FormEvent) => {
-    event.preventDefault(); if (busy) return; setBusy(true);
+    event.preventDefault(); if (busy) return;
+    const limiteVeiculos = parseVehicleLimit(form.limiteVeiculos);
+    if (limiteVeiculos === 'invalid') {
+      showToast('Informe um limite de veículos inteiro maior ou igual a zero, ou deixe em branco para ilimitado.', 'error');
+      return;
+    }
+    setBusy(true);
     try {
-      await httpClient.post('/usuarios', { ...form, permitirIpExterno: false });
-      setForm({ nome: '', email: '', password: '', role: 'OPERADOR' });
+      await httpClient.post('/usuarios', {
+        nome: form.nome,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        permitirIpExterno: false,
+        limiteVeiculos,
+      });
+      setForm({ nome: '', email: '', password: '', role: 'OPERADOR', limiteVeiculos: '' });
       setCreateOpen(false); await load(); showToast('Usuário cadastrado com sucesso.');
     } catch (error) { showToast(friendlyError(error), 'error'); }
     finally { setBusy(false); }
@@ -88,13 +109,14 @@ export default function UsuariosPage() {
         <span className="ef-list-count">{visible.length} de {users.length} usuários</span>
       </div>
       {loadingUsers ? <PageSkeleton label="Carregando usuários…" /> : loadError ? <div role="alert" className="p-6 space-y-3"><p>{loadError}</p><Btn onClick={load}>Tentar novamente</Btn></div> : visible.length === 0 ? <Empty icon={Users} title="Nenhum usuário encontrado" text={query ? 'Altere os termos da busca.' : 'Cadastre o primeiro usuário da equipe.'} /> : <>
-        <div className="overflow-x-auto"><table className="tbl ef-table-interactive"><thead><tr><th>Usuário</th><th>Permissão</th><th>Situação</th><th className="ef-tr">Ações</th></tr></thead>
+        <div className="overflow-x-auto"><table className="tbl ef-table-interactive"><thead><tr><th>Usuário</th><th>Permissão</th><th>Limite de veículos</th><th>Situação</th><th className="ef-tr">Ações</th></tr></thead>
         <tbody>{items.map(u => <tr key={u.id}>
           <td><div className="ef-user-name-cell"><span className="ef-user-initials" aria-hidden="true">{u.nome.trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase()}</span><div className="min-w-0"><b>{u.nome}</b><small>{u.email}</small></div></div></td>
           <td><Chip tone={u.role === 'ADMIN' ? 'blue' : 'gray'}>{ROLE_NAMES[u.role]}</Chip></td>
+          <td><Chip tone={u.limiteVeiculos == null ? 'gray' : 'amber'}>{u.limiteVeiculos == null ? 'Ilimitado' : `${u.limiteVeiculos} veículo(s)`}</Chip></td>
           <td><Chip tone={u.ativo ? 'teal' : 'gray'}>{u.ativo ? 'Ativo' : 'Inativo'}</Chip></td>
           <td className="ef-tr"><RowActionsMenu label={`Ações de ${u.nome}`} actions={[
-            { label: 'Alterar permissão', icon: UserCog, onClick: () => { setEditing(u); setRoleDraft(u.role); } },
+            { label: 'Editar permissão e limite', icon: UserCog, onClick: () => { setEditing(u); setRoleDraft(u.role); setLimitDraft(u.limiteVeiculos == null ? '' : String(u.limiteVeiculos)); } },
             { label: 'Redefinir senha', icon: KeyRound, onClick: () => { setResetUser(u); setResetPassword(''); } },
             { label: u.ativo ? 'Desativar acesso' : 'Reativar acesso', icon: UserX, danger: u.ativo, onClick: () => setStatusUser(u) },
           ]} /></td>
@@ -107,13 +129,21 @@ export default function UsuariosPage() {
       <Field label="Nome completo"><input className="inp" autoFocus value={form.nome} minLength={2} onChange={e => setForm(p => ({ ...p, nome: e.target.value }))} required /></Field>
       <Field label="E-mail"><input className="inp" type="email" autoComplete="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required /></Field>
       <Field label="Senha inicial"><input className="inp" type="password" autoComplete="new-password" minLength={12} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required /><span className="ef-field-help">Pelo menos 12 caracteres.</span></Field>
-      <Field label="Perfil de acesso"><select className="inp" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as User['role'] }))}><option value="OPERADOR">Operador</option><option value="DIRETOR">Diretor</option><option value="ADMIN">Administrador</option></select><span className="ef-field-help">{ROLE_DESCRIPTIONS[form.role]}</span></Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Perfil de acesso"><select className="inp" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as User['role'] }))}><option value="OPERADOR">Operador</option><option value="DIRETOR">Diretor</option><option value="ADMIN">Administrador</option></select><span className="ef-field-help">{ROLE_DESCRIPTIONS[form.role]}</span></Field>
+        <Field label="Limite de veículos (opcional)"><input className="inp mono" type="number" min="0" step="1" placeholder="Ilimitado" value={form.limiteVeiculos} onChange={e => setForm(p => ({ ...p, limiteVeiculos: e.target.value }))} /><span className="ef-field-help">Quantidade máxima de veículos que este login pode cadastrar. Deixe em branco para ilimitado.</span></Field>
+      </div>
       <FormActions label="Cadastrar usuário" onCancel={() => setCreateOpen(false)} loading={busy} v="primary"/>
     </form></Modal>}
-    {editing && <Modal title={`Permissão de ${editing.nome}`} onClose={() => { if (!busy) setEditing(null); }}><div className="space-y-4">
-      <p className="ef-t13" style={{color:'var(--ink2)'}}>Escolha quais recursos este usuário poderá utilizar. As permissões são aplicadas pelo servidor.</p>
+    {editing && <Modal title={`Permissão e limite · ${editing.nome}`} onClose={() => { if (!busy) setEditing(null); }}><div className="space-y-4">
+      <p className="ef-t13" style={{color:'var(--ink2)'}}>Defina o perfil de acesso e o limite de veículos que este usuário pode cadastrar. As regras são aplicadas pelo servidor.</p>
       <Field label="Perfil"><select className="inp" value={roleDraft} onChange={e => setRoleDraft(e.target.value as User['role'])}><option value="OPERADOR">Operador</option><option value="DIRETOR">Diretor</option><option value="ADMIN">Administrador</option></select><span className="ef-field-help">{ROLE_DESCRIPTIONS[roleDraft]}</span></Field>
-      <div className="flex justify-end gap-2"><Btn onClick={() => setEditing(null)} disabled={busy}>Cancelar</Btn><Btn v="primary" loading={busy} onClick={async () => { if (await update(editing, { role: roleDraft })) setEditing(null); }}>Salvar permissão</Btn></div>
+      <Field label="Limite de veículos (opcional)"><input className="inp mono" type="number" min="0" step="1" placeholder="Ilimitado" value={limitDraft} onChange={e => setLimitDraft(e.target.value)} /><span className="ef-field-help">Deixe em branco para não limitar o cadastro de veículos deste login.</span></Field>
+      <div className="flex justify-end gap-2"><Btn onClick={() => setEditing(null)} disabled={busy}>Cancelar</Btn><Btn v="primary" loading={busy} onClick={async () => {
+        const limiteVeiculos = parseVehicleLimit(limitDraft);
+        if (limiteVeiculos === 'invalid') { showToast('Informe um limite de veículos válido ou deixe em branco.', 'error'); return; }
+        if (await update(editing, { role: roleDraft, limiteVeiculos })) setEditing(null);
+      }}>Salvar alterações</Btn></div>
     </div></Modal>}
     {resetUser && <Modal title={`Redefinir senha · ${resetUser.nome}`} onClose={() => { if (!busy) setResetUser(null); }}><form className="space-y-4" onSubmit={reset}>
       <p className="ef-t13" style={{color:'var(--ink2)'}}>Ao confirmar, as sessões anteriores deste usuário serão encerradas.</p>

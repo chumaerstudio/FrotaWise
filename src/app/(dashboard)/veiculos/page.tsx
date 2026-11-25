@@ -4,12 +4,14 @@ import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Truck, Disc, ChevronRight, Search, MoreHorizontal } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
+import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency, formatNumber } from '@/services/api';
 import { Btn, Chip, Empty, Field, Modal, Plate, SectionHead } from '@/components/ui';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function VeiculosPage() {
   const router = useRouter();
+  const { usuario } = useAuth();
   const {
     vehicles,
     tires,
@@ -45,7 +47,11 @@ export default function VeiculosPage() {
       {liveMode && editing && <Modal title={`Editar veículo ${editing.placa}`} onClose={() => setEditing(null)} wide><form className="space-y-4" onSubmit={saveVehicle}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(['placa','uf','modelo','categoria'] as const).map(k=><Field key={k} label={{placa:'Placa',uf:'UF',modelo:'Modelo',categoria:'Categoria'}[k]}>
-            <input className="inp" value={editing[k]} onChange={e=>setEditing({...editing,[k]:e.target.value})} required/></Field>)}
+            <input className="inp" list={k === 'categoria' ? 'frotawise-categorias-veiculo-edit' : undefined} value={editing[k]} onChange={e=>setEditing({...editing,[k]:e.target.value})} required/></Field>)}
+          <datalist id="frotawise-categorias-veiculo-edit">
+            <option value="Carreta" /><option value="Cavalo Mecânico" /><option value="Caminhão Toco" />
+            <option value="Caminhão Truck" /><option value="Bitruck" />
+          </datalist>
           <Field label="Quantidade de eixos"><input type="number" className="inp" value={editing.eixos} min="2" max="6" onChange={e=>setEditing({...editing,eixos:Number(e.target.value)})}/></Field>
           <Field label="Situação"><select className="inp" value={editing.status} onChange={e=>setEditing({...editing,status:e.target.value as typeof editing.status})}>
             <option value="Operando">Operando</option><option value="Manutenção">Manutenção</option></select></Field>
@@ -55,7 +61,14 @@ export default function VeiculosPage() {
       </form></Modal>}
       <div className="card overflow-hidden">
       <SectionHead title="Frota de veículos" sub="Consulte um veículo pela placa para acessar sua ficha operacional.">
-        <Chip tone="gray">{vehicles.length} equipamentos</Chip>
+        <div className="flex flex-wrap items-center gap-2">
+          {usuario?.limiteVeiculos != null && (
+            <Chip tone={(usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos ? 'red' : 'blue'}>
+              Cota do acesso: {usuario.veiculosCadastrados ?? 0}/{usuario.limiteVeiculos}
+            </Chip>
+          )}
+          <Chip tone="gray">{vehicles.length} equipamentos</Chip>
+        </div>
       </SectionHead>
       <div className="ef-list-toolbar">
         <label className="ef-list-search"><Search size={16}/><span className="sr-only">Buscar veículos</span><input placeholder="Placa, modelo ou categoria…" value={query} onChange={e => { setQuery(e.target.value); resetPage(); }}/></label>

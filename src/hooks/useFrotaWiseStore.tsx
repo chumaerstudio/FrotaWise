@@ -796,7 +796,10 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
         t.id === tire.id
           ? {
               ...t,
-              recapagens: (Number(t.recapagens) || 0) + 1,
+              recapagens: Math.max(
+                Number(t.recapagens) || 0,
+                Math.max(0, ...(t.reformas || []).map((r) => Number(r.ciclo) || 0)) || (Number(t.recapagens) || 0) + 1
+              ),
               sulcoMm: 14.0,
               classificacao: 'Estocar',
               veiculoAtualId: '',

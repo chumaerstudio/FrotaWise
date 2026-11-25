@@ -38,6 +38,7 @@ export default function PneusHubPage() {
     draggedTireId,
     setDraggedTireId,
     openTireOperationModal,
+    handleCompleteRecap,
     setHistoryModalTire,
     startEditTire,
     handleDeleteTire,
@@ -118,16 +119,20 @@ export default function PneusHubPage() {
     const sourceDelta = kmSource - Number(source.kmTotal || 0); const targetDelta = kmTarget - Number(target.kmTotal || 0);
     if (liveMode) {
       try {
-        await httpClient.post(`/pneus/${source.id}/operacao`, { targetAction: 'Estocar', targetVehicleId: null, targetSlotCode: null, kmRodados: sourceDelta, ...(kmVehicle == null ? {} : { hodometroRetiradaKm: kmVehicle }), localEstoque: 'Troca de posição', obs: `Troca de posição para ${targetPos}` }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
-        await httpClient.post(`/pneus/${target.id}/operacao`, { targetAction: 'Mount', targetVehicleId: activeVehicle.id, targetSlotCode: sourcePos, kmRodados: targetDelta, ...(kmVehicle == null ? {} : { hodometroInstalacaoKm: kmVehicle }), obs: `Troca de posição com pneu #${source.fogo}` }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
-        await httpClient.post(`/pneus/${source.id}/operacao`, { targetAction: 'Mount', targetVehicleId: activeVehicle.id, targetSlotCode: targetPos, kmRodados: 0, ...(kmVehicle == null ? {} : { hodometroInstalacaoKm: kmVehicle }), obs: `Troca de posição com pneu #${target.fogo}` }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
-        if (kmVehicle != null) await httpClient.patch(`/veiculos/${activeVehicle.id}`, { kmAtual: kmVehicle });
+        await httpClient.post('/pneus/trocar-posicoes', {
+          pneuOrigemId: source.id,
+          pneuDestinoId: target.id,
+          kmRodadosOrigem: sourceDelta,
+          kmRodadosDestino: targetDelta,
+          kmVeiculo: kmVehicle,
+          obs: `Troca de posição ${sourcePos} ↔ ${targetPos}`,
+        }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
         await refreshLiveData();
-        showToast(`Posições dos pneus #${source.fogo} e #${target.fogo} trocadas.`);
+        showToast(`Posições dos pneus #${source.fogo} e #${target.fogo} trocadas. KM atualizado.`);
         setSwapDraft(null); setDraggedTireId(null); return;
       } catch (error) {
         await refreshLiveData().catch(() => undefined);
-        showToast(`Não foi possível concluir a troca integralmente. Confira as posições atuais antes de repetir. ${api39Error(error)}`, 'error');
+        showToast(`Não foi possível concluir a troca de posições. ${api39Error(error)}`, 'error');
         return;
       }
     }
@@ -485,7 +490,12 @@ export default function PneusHubPage() {
                             {t.medida}
                           </div>
                         </td>
-                        <td className="ef-t13">{st.label}</td>
+                        <td className="ef-t13">
+                          <div>{st.label}</div>
+                          <div className="ef-t11_5" style={{ color: 'var(--mute)' }}>
+                            {t.recapagens ? `${t.recapagens} recapagem(ns)` : 'Sem recapagem'}
+                          </div>
+                        </td>
                         <td className="mono text-center">{t.sulcoMm} mm</td>
                         <td className="mono ef-t12_5">{t.localEstoque || 'Almoxarifado'}</td>
                         <td className="mono text-right font-bold">{formatNumber(t.kmTotal)} km</td>
@@ -509,9 +519,15 @@ export default function PneusHubPage() {
                           >
                             Montar
                           </Btn>
-                          <Btn sm onClick={() => openTireOperationModal(t, 'Recapar')}>
-                            Recapar
-                          </Btn>
+                          {t.classificacao === 'Recapar' ? (
+                            <Btn sm v="soft" onClick={() => handleCompleteRecap(t)}>
+                              Concluir recape
+                            </Btn>
+                          ) : (
+                            <Btn sm onClick={() => openTireOperationModal(t, 'Recapar')}>
+                              Recapar
+                            </Btn>
+                          )}
                           <Btn sm onClick={() => openTireOperationModal(t, 'Sucatear')}>
                             Sucatear
                           </Btn>
@@ -586,6 +602,9 @@ export default function PneusHubPage() {
                         <span className="inline-flex items-center rounded-lg px-2.5 py-1 ef-t12 font-semibold text-white" style={{ background: st.c }}>
                           {t.classificacao}
                         </span>
+                        <div className="ef-t11_5 mt-1" style={{ color: 'var(--mute)' }}>
+                          {st.label} · {t.recapagens ? `${t.recapagens} rec.` : '0 rec.'}
+                        </div>
                       </td>
                       <td className="mono ef-t12_5">
                         {veh ? `${veh.placa} (${t.posicaoAtual})` : t.localEstoque || 'Estoque'}
@@ -618,9 +637,15 @@ export default function PneusHubPage() {
                         <Btn sm onClick={() => openTireOperationModal(t, 'Estocar')}>
                           Estocar
                         </Btn>
-                        <Btn sm onClick={() => openTireOperationModal(t, 'Recapar')}>
-                          Recapar
-                        </Btn>
+                        {t.classificacao === 'Recapar' && !t.veiculoAtualId ? (
+                          <Btn sm v="soft" onClick={() => handleCompleteRecap(t)}>
+                            Concluir recape
+                          </Btn>
+                        ) : (
+                          <Btn sm onClick={() => openTireOperationModal(t, 'Recapar')}>
+                            Recapar
+                          </Btn>
+                        )}
                         <Btn sm onClick={() => openTireOperationModal(t, 'Sucatear')}>
                           Sucatear
                         </Btn>

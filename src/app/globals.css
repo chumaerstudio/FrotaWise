@@ -239,7 +239,7 @@
 .ef .ef-skeleton{position:relative;overflow:hidden;border-radius:8px;background:var(--soft)}
 .ef .ef-skeleton::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 10%,var(--card) 50%,transparent 90%);opacity:.45;transform:translateX(-100%);animation:ef-shimmer 1.4s ease-in-out infinite}
 @keyframes ef-shimmer{to{transform:translateX(100%)}}
-.ef-notice{width:min(420px,calc(100vw - 32px));max-width:calc(100vw - 32px);background:var(--card);color:var(--ink);border-color:var(--line3);box-shadow:0 16px 40px rgba(6,16,32,.22)}
+.ef-notice{z-index:200;width:min(420px,calc(100vw - 32px));max-width:calc(100vw - 32px);background:var(--card);color:var(--ink);border-color:var(--line3);box-shadow:0 16px 40px rgba(6,16,32,.22)}
 .ef-notice-success{border-left:4px solid var(--teal)}.ef-notice-success>svg:first-child{color:var(--teal)}
 .ef-notice-error{border-left:4px solid var(--red)}.ef-notice-error>svg:first-child{color:var(--red)}
 .ef-notice-warning{border-left:4px solid var(--amber)}.ef-notice-warning>svg:first-child{color:var(--amber-ink)}
@@ -322,7 +322,7 @@
 .ef .ef-financeiro .ef-fin-deadline-today{color:var(--amber-ink);font-weight:700}
 .ef .ef-financeiro .ef-fin-actions{min-width:max-content}
 .ef .ef-financeiro .ef-fin-actions .btn{min-height:34px}
-.ef .ef-financeiro .ef-fin-actions .btn[aria-label]{width:35px;min-width:35px;padding:6px}
+.ef .ef-financeiro .ef-fin-actions .btn-icon-only{width:35px;min-width:35px;padding:6px}
 .ef .ef-financeiro .ef-g-fin{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:20px}
 .ef .ef-financeiro .ef-band{position:relative;display:flex;align-items:center;gap:14px;padding:21px 23px;min-height:96px;background:linear-gradient(108deg,var(--pet),var(--pet2));color:#fff;overflow:hidden}
 .ef .ef-financeiro .ef-band .ef-tile-glass{position:relative;z-index:1;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);box-shadow:none}
@@ -793,3 +793,6 @@
   .ef .ef-tire-active-actions{width:100%}
   .ef .ef-tire-active-actions .btn{flex:1}
 }
+.ef .ef-finopts{padding:14px;border:1px solid var(--line);border-radius:11px;background:var(--card2)}
+.ef .ef-check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;line-height:1.4}
+.ef .ef-check input[type=checkbox]{margin-top:3px;width:16px;height:16px;accent-color:var(--teal);flex-shrink:0}

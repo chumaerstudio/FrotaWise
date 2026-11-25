@@ -5,6 +5,7 @@ import { httpClient } from '@/lib/http/client';
 import { api39Error, savePlan } from '@/services/operacional39Service';
 import { Disc, History, X } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
+import { useAuth } from '@/hooks/useAuth';
 import {
   BANDAS_PNEU,
   CATEGORIAS_MANUTENCAO,
@@ -37,6 +38,7 @@ import {
 import {
   cmpFuel,
   computeFuelMedias,
+  getVehicleChassisSlots,
   odometerFrom,
   vehicleLaunchKms,
 } from '@/services/veiculosService';
@@ -64,6 +66,7 @@ import type {
 
 export const GlobalModals: React.FC = () => {
   const router = useRouter();
+  const { usuario, revalidarSessao } = useAuth();
   const {
     company,
     vehicles,
@@ -125,6 +128,7 @@ export const GlobalModals: React.FC = () => {
   const [actionFornecedorInput, setActionFornecedorInput] = useState('');
   const [actionValorInput, setActionValorInput] = useState('');
   const [actionKmVeiculoInput, setActionKmVeiculoInput] = useState('');
+  const [actionKmVeiculoEdited, setActionKmVeiculoEdited] = useState(false);
   // Chave de idempotência da movimentação: nova a cada abertura do modal.
   const [actionMovId, setActionMovId] = useState('');
   const movimentosEnviados = useRef(new Set<string>());
@@ -138,6 +142,7 @@ export const GlobalModals: React.FC = () => {
       const currentVehicleId = tireActionModal.targetAction === 'Mount' ? tireActionModal.targetVehicleId : tireActionModal.tire.veiculoAtualId;
       const currentVehicle = vehicles.find((vehicle) => vehicle.id === currentVehicleId);
       setActionKmVeiculoInput(currentVehicle ? String(currentVehicle.kmAtual || 0) : '');
+      setActionKmVeiculoEdited(false);
       setActionKmInput('');
       setActionObsInput('');
       setActionStockLocInput(tireActionModal.tire.localEstoque || 'Prateleira A-01');
@@ -417,11 +422,12 @@ export const GlobalModals: React.FC = () => {
         }
       }
     } else if (existingId && pagamentos.some((plan) => plan.origem === origem && plan.origemId === existingId)) {
-      notice = 'Registro atualizado. O plano financeiro anterior permanece, pois a API atual não disponibiliza uma operação documentada para removê-lo.';
-      tone = 'warning';
-    } else if (!form.integrarFinanceiro) {
-      notice = 'Registro salvo. A API atual não documenta um campo para desativar a integração financeira deste tipo de lançamento; confirme o resultado no Financeiro.';
-      tone = 'warning';
+      try {
+        await httpClient.delete(`/financeiro/pagamentos/${encodeURIComponent(origem)}/${encodeURIComponent(existingId)}`, { timeout: 30000 });
+      } catch (error) {
+        notice = `Registro atualizado, mas não foi possível remover o plano financeiro anterior: ${api39Error(error)}`;
+        tone = 'warning';
+      }
     }
     try { await refreshLiveData(); } catch { /* Registro principal já foi confirmado. */ }
     showToast(notice, tone);
@@ -466,9 +472,11 @@ export const GlobalModals: React.FC = () => {
         posicaoAtual: '',
         localEstoque: actionStockLocInput || 'Almoxarifado Geral',
       };
-    if (action === 'Recapar')
+    if (action === 'Recapar') {
+      const nextRecapCount = (Number(t.recapagens) || 0) + 1;
       return {
         ...t,
+        recapagens: nextRecapCount,
         classificacao: 'Recapar',
         veiculoAtualId: '',
         posicaoAtual: '',
@@ -479,13 +487,14 @@ export const GlobalModals: React.FC = () => {
           {
             id: 'r-' + Date.now(),
             data: today(),
-            ciclo: (Number(t.recapagens) || 0) + 1,
+            ciclo: nextRecapCount,
             tipoBanda: actionBandaInput,
             fornecedor: actionFornecedorInput.trim(),
             valor: Number(actionValorInput) || 0,
           },
         ],
       };
+    }
     if (action === 'Sucatear')
       return {
         ...t,
@@ -523,9 +532,8 @@ export const GlobalModals: React.FC = () => {
     }
 
     if (liveMode) {
-      // Contrato do backend: kmRodados = KM final − KM inicial (o KM inicial é o último KM do pneu).
-      const vehicleReading = kmVeic === null || !veiculo ? {} : targetAction === 'Mount'
-        ? { hodometroInstalacaoKm: kmVeic } : targetAction === 'AddKm' ? {} : { hodometroRetiradaKm: kmVeic };
+      // Contrato do backend: kmRodados = KM final − KM inicial; kmVeiculo atualiza o hodômetro atomicamente.
+      const vehicleReading = kmVeic === null || !veiculo ? {} : { kmVeiculo: kmVeic };
       void (async () => {
         const ok = await awaitLive('post', `/pneus/${tire.id}/operacao`, {
           targetAction, targetVehicleId: targetAction === 'Mount' ? targetVehicleId : null,
@@ -535,10 +543,6 @@ export const GlobalModals: React.FC = () => {
           fornecedor: actionFornecedorInput || null, valor: Math.max(0, Number(actionValorInput) || 0), obs: actionObsInput,
         }, 'Movimentação do pneu registrada.', true, actionMovId);
         if (!ok) return;
-        if (kmVeic !== null && veiculo) {
-          const updated = await awaitLive('patch', `/veiculos/${veiculo.id}`, { kmAtual: kmVeic }, 'Hodômetro do veículo atualizado.');
-          if (!updated) { showToast('A movimentação foi registrada, mas o hodômetro do veículo não foi atualizado. Confira o cadastro do veículo.', 'error'); return; }
-        }
         setTireActionModal(null); setSelectedTireForActionId(null);
       })();
       return;
@@ -602,6 +606,15 @@ export const GlobalModals: React.FC = () => {
       setHistoryEdit(null);
       return;
     }
+    if (liveMode) {
+      void awaitLive(
+        'patch',
+        `/pneus/${tireId}/historico/${movId}`,
+        { kmRodados: res.kmMovimentacao ?? 0 },
+        'Movimentação atualizada.'
+      ).then((ok) => { if (ok) setHistoryEdit(null); });
+      return;
+    }
     const nextTires = tires.map((x) => (x.id === tireId ? res.tire : x));
     setTires(nextTires);
     const ids = Array.from(new Set((t.historicoVeiculos || []).map((h) => h.veiculoId).filter(Boolean) as string[]));
@@ -618,6 +631,9 @@ export const GlobalModals: React.FC = () => {
       description: 'A quilometragem desta movimentação será estornada. A posição atual do pneu não será alterada.',
       confirmLabel: 'Cancelar movimentação',
       action: () => {
+        if (liveMode) {
+          return awaitLive('post', `/pneus/${tireId}/historico/${movId}/cancelar`, undefined, 'Movimentação cancelada.');
+        }
         const res = cancelarMovimentacao(t, movId, today());
         if (res.erro) { showToast(res.erro, 'error'); return; }
         const nextTires = tires.map(x => x.id === tireId ? res.tire : x);
@@ -640,7 +656,11 @@ export const GlobalModals: React.FC = () => {
         kmAtual: Math.max(0, Number(vehicleForm.kmAtual) || 0),
         kmBase: Math.max(0, Number(vehicleForm.kmAtual) || 0), status: 'Operando',
       }, 'Veículo cadastrado.').then(ok => {
-        if (ok) {setShowVehicleModal(false); setVehicleForm(emptyVehicle);}
+        if (ok) {
+          setShowVehicleModal(false);
+          setVehicleForm(emptyVehicle);
+          void revalidarSessao();
+        }
       });
       return;
     }
@@ -818,6 +838,7 @@ export const GlobalModals: React.FC = () => {
         descricao: maintenanceForm.descricao.trim(),
         fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
         data: maintenanceForm.data, valor: Number(maintenanceForm.valor),
+        integrarFinanceiro: !!maintenanceForm.integrarFinanceiro,
       };
       void liveMutationWithPlan('post', '/manutencoes', item, 'manutencao', maintenanceForm, maintenanceForm.data, 'Manutenção registrada.')
         .then(ok => {if (ok) closeMaintenanceModal();});
@@ -884,6 +905,7 @@ export const GlobalModals: React.FC = () => {
         descricao: maintenanceForm.descricao.trim(),
         fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
         valor: Number(maintenanceForm.valor),
+        integrarFinanceiro: !!maintenanceForm.integrarFinanceiro,
       }, 'manutencao', maintenanceForm, old.data, 'Manutenção atualizada.', old.id).then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
@@ -1130,6 +1152,7 @@ export const GlobalModals: React.FC = () => {
         identificado: fineForm.identificado,
         motorista: fineForm.motorista || 'Não informado', status: fineForm.status,
         data: fineForm.data, pontos: Number(fineForm.pontos), valorOriginal: Number(fineForm.valor),
+        integrarFinanceiro: !!fineForm.integrarFinanceiro,
       }, 'multa', fineForm, fineForm.data, 'Multa registrada.')
         .then(ok => {if (ok) closeFineModal();});
       return;
@@ -1212,7 +1235,10 @@ export const GlobalModals: React.FC = () => {
       if (old.veiculoId !== fineForm.veiculoId || old.motivo !== fineForm.motivo.trim() || old.data !== fineForm.data || (old.valorOriginal ?? old.valor) !== Number(fineForm.valor) || old.ait !== fineForm.ait.trim() || old.identificado !== fineForm.identificado || (old.motorista || '') !== (fineForm.identificado ? fineForm.motorista || '' : 'Não identificado') || old.pontos !== (fineForm.identificado ? Number(fineForm.pontos) : 0)) {
         showToast('Somente a situação da multa pode ser alterada por aqui. Os demais dados permanecerão iguais.', 'warning'); return;
       }
-      void liveMutationWithPlan('patch', `/multas/${old.id}/status`, { status: fineForm.status }, 'multa', fineForm, old.data, 'Status da multa atualizado.', old.id)
+      void liveMutationWithPlan('patch', `/multas/${old.id}/status`, {
+        status: fineForm.status,
+        integrarFinanceiro: !!fineForm.integrarFinanceiro,
+      }, 'multa', fineForm, old.data, 'Status da multa atualizado.', old.id)
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
@@ -1267,7 +1293,8 @@ export const GlobalModals: React.FC = () => {
     const v = vehicles.find((x) => x.id === detailVehicleId);
     if (!v) return null;
     const close = () => setDetailVehicleId(null);
-    const totalSlots = 2 + (Math.max(2, Math.min(6, Number(v.eixos) || 3)) - 1) * 4;
+    const chassisLayout = getVehicleChassisSlots(v.eixos, v.categoria);
+    const totalSlots = chassisLayout.axles.reduce((sum, ax) => sum + ax.leftSlots.length + ax.rightSlots.length, 0);
     const mountedTires = tires.filter((t) => t.veiculoAtualId === v.id);
     const filled = mountedTires.filter((t) => t.posicaoAtual !== 'ESTEPE-1').length;
     const occ = Math.min(100, Math.round((filled / totalSlots) * 100));
@@ -1532,7 +1559,15 @@ export const GlobalModals: React.FC = () => {
                         placeholder={String(kmInicial)}
                         autoFocus
                         value={actionKmInput}
-                        onChange={(e) => setActionKmInput(e.target.value)}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setActionKmInput(nextVal);
+                          if (!actionKmVeiculoEdited && veiculo) {
+                            const parsed = nextVal === '' ? null : Number(nextVal);
+                            const delta = parsed !== null && Number.isFinite(parsed) && parsed >= kmInicial ? parsed - kmInicial : 0;
+                            setActionKmVeiculoInput(String((Number(veiculo.kmAtual) || 0) + delta));
+                          }
+                        }}
                       />
                     </Field>
                     <Field label="KM da movimentação">
@@ -1552,7 +1587,7 @@ export const GlobalModals: React.FC = () => {
                   )}
                   {(veiculo || tireActionModal.targetVehicleId) && (
                     <Field
-                      label={`KM do veículo${veiculo ? ` ${veiculo.placa}` : ''} (opcional · hodômetro atual ${
+                      label={`KM do veículo${veiculo ? ` ${veiculo.placa}` : ''} (hodômetro atual ${
                         veiculo ? formatNumber(veiculo.kmAtual) : '—'
                       } km)`}
                     >
@@ -1560,10 +1595,18 @@ export const GlobalModals: React.FC = () => {
                         type="number"
                         min={veiculo ? Number(veiculo.kmAtual) || 0 : 0}
                         className="inp mono"
-                        placeholder="Leitura do hodômetro, se quiser atualizar o veículo"
+                        placeholder="Leitura do hodômetro do veículo"
                         value={actionKmVeiculoInput}
-                        onChange={(e) => setActionKmVeiculoInput(e.target.value)}
+                        onChange={(e) => {
+                          setActionKmVeiculoEdited(true);
+                          setActionKmVeiculoInput(e.target.value);
+                        }}
                       />
+                      {veiculo && calc.ok && calc.km > 0 && !actionKmVeiculoEdited && (
+                        <span className="ef-field-help">
+                          Somando +{formatNumber(calc.km)} km automaticamente ao hodômetro de {veiculo.placa}. Você pode ajustar se necessário.
+                        </span>
+                      )}
                     </Field>
                   )}
                 </>
@@ -1783,6 +1826,19 @@ export const GlobalModals: React.FC = () => {
       {showVehicleModal && (
         <Modal title="Cadastrar veículo" onClose={() => setShowVehicleModal(false)}>
           <form onSubmit={handleCreateVehicle} className="space-y-3">
+            {liveMode && usuario?.limiteVeiculos != null && (
+              <div
+                className="ef-t12_5 px-3 py-2 rounded-lg"
+                style={{
+                  background: (usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos ? 'var(--red-soft)' : 'var(--blue-soft)',
+                  color: (usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos ? 'var(--red-ink)' : 'var(--blue-ink)',
+                }}
+              >
+                {(usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos
+                  ? `Limite de cadastro atingido para este acesso (${usuario.veiculosCadastrados ?? 0}/${usuario.limiteVeiculos} veículos).`
+                  : `Cota deste acesso: ${usuario.veiculosCadastrados ?? 0} de ${usuario.limiteVeiculos} veículos cadastrados.`}
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <Field label="Placa">
