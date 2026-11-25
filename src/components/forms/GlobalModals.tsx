@@ -473,7 +473,8 @@ export const GlobalModals: React.FC = () => {
         localEstoque: actionStockLocInput || 'Almoxarifado Geral',
       };
     if (action === 'Recapar') {
-      const nextRecapCount = (Number(t.recapagens) || 0) + 1;
+      const maxExistingCiclo = Math.max(0, ...(t.reformas || []).map((r) => Number(r.ciclo) || 0));
+      const nextRecapCount = Math.max(Number(t.recapagens) || 0, maxExistingCiclo) + 1;
       return {
         ...t,
         recapagens: nextRecapCount,
