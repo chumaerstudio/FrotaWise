@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Search, LoaderCircle, LucideIcon } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatNumber } from '@/services/api';
-import { getTireKmStageStyle } from '@/services/pneusService';
+import { getTireRecapStyle } from '@/services/pneusService';
 import { Pneu } from '@/types/frotawise';
 
 export const cx = (...a: (string | boolean | undefined | null)[]) => a.filter(Boolean).join(' ');
@@ -344,8 +344,7 @@ export const TireChip: React.FC<{
   /** 'chassis' = pneu desenhado sobre a imagem do chassi (cor do status + banda). */
   variant?: 'chip' | 'chassis';
 }> = ({ t, selected, onSelect, onDragStartTire, onDragEndTire, onDropTire, draggedTireId, variant = 'chip' }) => {
-  const { company } = useEstoquePneus();
-  const st = getTireKmStageStyle(t, company);
+  const st = getTireRecapStyle(t.recapagens);
   const chassis = variant === 'chassis';
   return (
     <div

@@ -3,7 +3,7 @@
   "info": {
     "title": "FrotaWise API",
     "description": "SaaS B2B multi-tenant",
-    "version": "3.5.0"
+    "version": "3.10.0"
   },
   "paths": {
     "/v1/auth/login": {
@@ -1354,6 +1354,61 @@
         }
       }
     },
+    "/v1/pneus/trocar-posicoes": {
+      "post": {
+        "tags": [
+          "Pneus"
+        ],
+        "summary": "Swap Tire Positions",
+        "operationId": "swap_tire_positions_v1_pneus_trocar_posicoes_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PneuTrocaPosicoes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/pneus/{item_id}/operacao": {
       "post": {
         "tags": [
@@ -1440,6 +1495,128 @@
               "type": "string",
               "format": "uuid",
               "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pneus/{pneu_id}/historico/{historico_id}": {
+      "patch": {
+        "tags": [
+          "Pneus"
+        ],
+        "summary": "Edit History Km",
+        "operationId": "edit_history_km_v1_pneus__pneu_id__historico__historico_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pneu_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Pneu Id"
+            }
+          },
+          {
+            "name": "historico_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Historico Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoricoKmEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pneus/{pneu_id}/historico/{historico_id}/cancelar": {
+      "post": {
+        "tags": [
+          "Pneus"
+        ],
+        "summary": "Cancel History Km",
+        "operationId": "cancel_history_km_v1_pneus__pneu_id__historico__historico_id__cancelar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pneu_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Pneu Id"
+            }
+          },
+          {
+            "name": "historico_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Historico Id"
             }
           }
         ],
@@ -2027,6 +2204,1378 @@
           }
         ]
       }
+    },
+    "/v1/viagens": {
+      "get": {
+        "tags": [
+          "Viagens"
+        ],
+        "summary": "List Trips",
+        "operationId": "list_trips_v1_viagens_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Viagens"
+        ],
+        "summary": "Create Trip",
+        "operationId": "create_trip_v1_viagens_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViagemIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/viagens/{item_id}": {
+      "get": {
+        "tags": [
+          "Viagens"
+        ],
+        "summary": "One Trip",
+        "operationId": "one_trip_v1_viagens__item_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Viagens"
+        ],
+        "summary": "Edit Trip",
+        "operationId": "edit_trip_v1_viagens__item_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViagemEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Viagens"
+        ],
+        "summary": "Delete Trip",
+        "operationId": "delete_trip_v1_viagens__item_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/custos-fixos": {
+      "get": {
+        "tags": [
+          "Custos fixos"
+        ],
+        "summary": "List Costs",
+        "operationId": "list_costs_v1_custos_fixos_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Custos fixos"
+        ],
+        "summary": "Add Cost",
+        "operationId": "add_cost_v1_custos_fixos_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustoFixoIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/custos-fixos/{item_id}": {
+      "patch": {
+        "tags": [
+          "Custos fixos"
+        ],
+        "summary": "Update Cost",
+        "operationId": "update_cost_v1_custos_fixos__item_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustoFixoEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Custos fixos"
+        ],
+        "summary": "Update Cost",
+        "operationId": "update_cost_v1_custos_fixos__item_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustoFixoEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Custos fixos"
+        ],
+        "summary": "Delete Cost",
+        "operationId": "delete_cost_v1_custos_fixos__item_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/financeiro/contas": {
+      "get": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "List Accounts",
+        "operationId": "list_accounts_v1_financeiro_contas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Add Account",
+        "operationId": "add_account_v1_financeiro_contas_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContaPagarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/financeiro/contas/{item_id}": {
+      "put": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Edit Account",
+        "operationId": "edit_account_v1_financeiro_contas__item_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContaPagarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Edit Account",
+        "operationId": "edit_account_v1_financeiro_contas__item_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContaPagarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Delete Account",
+        "operationId": "delete_account_v1_financeiro_contas__item_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/financeiro/pagamentos": {
+      "get": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "List Payments",
+        "operationId": "list_payments_v1_financeiro_pagamentos_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Upsert Payment",
+        "operationId": "upsert_payment_v1_financeiro_pagamentos_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagamentoPlanoIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/financeiro/pagamentos/{origem}/{origem_id}": {
+      "delete": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Delete Payment Plan",
+        "operationId": "delete_payment_plan_v1_financeiro_pagamentos__origem___origem_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "origem",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Origem"
+            }
+          },
+          {
+            "name": "origem_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Origem Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/financeiro/competencias": {
+      "get": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "List Cost Dues",
+        "operationId": "list_cost_dues_v1_financeiro_competencias_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/financeiro/resumo": {
+      "get": {
+        "tags": [
+          "Financeiro"
+        ],
+        "summary": "Finance Summary",
+        "operationId": "finance_summary_v1_financeiro_resumo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/platform/auth/login": {
+      "post": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Login",
+        "operationId": "login_v1_platform_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformLoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/platform/auth/me": {
+      "get": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Me",
+        "operationId": "me_v1_platform_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/platform/auth/logout": {
+      "post": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_v1_platform_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/platform/dashboard/resumo": {
+      "get": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Summary",
+        "operationId": "summary_v1_platform_dashboard_resumo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/platform/empresas": {
+      "get": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Companies",
+        "operationId": "companies_v1_platform_empresas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Create Company",
+        "operationId": "create_company_v1_platform_empresas_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformCompanyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/platform/empresas/{item_id}": {
+      "get": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Company",
+        "operationId": "company_v1_platform_empresas__item_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/platform/empresas/{item_id}/usuarios": {
+      "get": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Company Users",
+        "operationId": "company_users_v1_platform_empresas__item_id__usuarios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/platform/empresas/{item_id}/status": {
+      "patch": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Set Company Status",
+        "operationId": "set_company_status_v1_platform_empresas__item_id__status_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformCompanyStatus"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/platform/auditoria": {
+      "get": {
+        "tags": [
+          "Plataforma — acesso restrito"
+        ],
+        "summary": "Audit",
+        "operationId": "audit_v1_platform_auditoria_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2056,8 +3605,7 @@
                 "exclusiveMinimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -2072,8 +3620,7 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -2091,6 +3638,18 @@
               }
             ],
             "title": "Fornecedor"
+          },
+          "viagemId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viagemid"
           }
         },
         "additionalProperties": false,
@@ -2125,8 +3684,7 @@
                 "exclusiveMinimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "title": "Litros"
@@ -2138,8 +3696,7 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "title": "Valorunit"
@@ -2153,6 +3710,18 @@
             "type": "string",
             "minLength": 1,
             "title": "Fornecedor"
+          },
+          "viagemId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viagemid"
           }
         },
         "additionalProperties": false,
@@ -2188,7 +3757,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -2218,6 +3787,340 @@
           "newPassword"
         ],
         "title": "ChangePassword"
+      },
+      "CondicoesPagamento": {
+        "properties": {
+          "forma": {
+            "type": "string",
+            "enum": [
+              "avista",
+              "parcelado"
+            ],
+            "title": "Forma",
+            "default": "avista"
+          },
+          "meioPagamento": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Meiopagamento",
+            "default": "Boleto"
+          },
+          "parcelas": {
+            "type": "integer",
+            "maximum": 48.0,
+            "minimum": 1.0,
+            "title": "Parcelas",
+            "default": 1
+          },
+          "vencimento": {
+            "type": "string",
+            "format": "date",
+            "title": "Vencimento"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "vencimento"
+        ],
+        "title": "CondicoesPagamento"
+      },
+      "ContaPagarIn": {
+        "properties": {
+          "veiculoId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Veiculoid"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "Abastecimento",
+              "Manutenção",
+              "Multa",
+              "Pneus",
+              "Custo Fixo",
+              "Outros"
+            ],
+            "title": "Tipo",
+            "default": "Outros"
+          },
+          "descricao": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Descricao"
+          },
+          "fornecedor": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Fornecedor",
+            "default": ""
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valor"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "descricao",
+          "valor",
+          "data"
+        ],
+        "title": "ContaPagarIn"
+      },
+      "CustoFixoEdit": {
+        "properties": {
+          "veiculoId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Veiculoid"
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "Seguro",
+              "IPVA / Licenciamento",
+              "Rastreamento",
+              "Financiamento / Consórcio",
+              "Salário / Encargos",
+              "Outros"
+            ],
+            "title": "Categoria"
+          },
+          "descricao": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Descricao"
+          },
+          "valorMensal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valormensal"
+          },
+          "diaVencimento": {
+            "type": "integer",
+            "maximum": 31.0,
+            "minimum": 1.0,
+            "title": "Diavencimento"
+          },
+          "inicio": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Inicio"
+          },
+          "fim": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fim"
+          },
+          "ativo": {
+            "type": "boolean",
+            "title": "Ativo",
+            "default": true
+          },
+          "integrarFinanceiro": {
+            "type": "boolean",
+            "title": "Integrarfinanceiro",
+            "default": true
+          },
+          "formaPagamento": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Formapagamento",
+            "default": "Boleto"
+          },
+          "obs": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Obs",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "veiculoId",
+          "categoria",
+          "descricao",
+          "valorMensal",
+          "diaVencimento",
+          "inicio"
+        ],
+        "title": "CustoFixoEdit"
+      },
+      "CustoFixoIn": {
+        "properties": {
+          "veiculoId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Veiculoid"
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "Seguro",
+              "IPVA / Licenciamento",
+              "Rastreamento",
+              "Financiamento / Consórcio",
+              "Salário / Encargos",
+              "Outros"
+            ],
+            "title": "Categoria"
+          },
+          "descricao": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Descricao"
+          },
+          "valorMensal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valormensal"
+          },
+          "diaVencimento": {
+            "type": "integer",
+            "maximum": 31.0,
+            "minimum": 1.0,
+            "title": "Diavencimento"
+          },
+          "inicio": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Inicio"
+          },
+          "fim": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fim"
+          },
+          "ativo": {
+            "type": "boolean",
+            "title": "Ativo",
+            "default": true
+          },
+          "integrarFinanceiro": {
+            "type": "boolean",
+            "title": "Integrarfinanceiro",
+            "default": true
+          },
+          "formaPagamento": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Formapagamento",
+            "default": "Boleto"
+          },
+          "obs": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Obs",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "veiculoId",
+          "categoria",
+          "descricao",
+          "valorMensal",
+          "diaVencimento",
+          "inicio"
+        ],
+        "title": "CustoFixoIn"
+      },
+      "DespesaManualIn": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Descricao"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valor"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "origem": {
+            "type": "string",
+            "const": "manual",
+            "title": "Origem",
+            "default": "manual"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "descricao",
+          "valor",
+          "data"
+        ],
+        "title": "DespesaManualIn"
       },
       "EmpresaConfigIn": {
         "properties": {
@@ -2251,6 +4154,38 @@
         ],
         "title": "EmpresaConfigIn"
       },
+      "FirstCompanyAdmin": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Nome"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 5,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 12,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome",
+          "email",
+          "password"
+        ],
+        "title": "FirstCompanyAdmin"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2264,14 +4199,88 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HistoricoKmEdit": {
+        "properties": {
+          "kmRodados": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Kmrodados"
+          },
+          "obs": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kmRodados"
+        ],
+        "title": "HistoricoKmEdit"
+      },
+      "ItemViagemIn": {
+        "properties": {
+          "descricao": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Descricao"
+          },
+          "quantidade": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Quantidade",
+            "default": "1"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "descricao",
+          "valor"
+        ],
+        "title": "ItemViagemIn"
+      },
       "LoginIn": {
         "properties": {
           "email": {
             "type": "string",
+            "maxLength": 255,
+            "minLength": 3,
             "title": "Email"
           },
           "password": {
             "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
             "title": "Password"
           }
         },
@@ -2353,6 +4362,16 @@
       },
       "ManutencaoEdit": {
         "properties": {
+          "planoPagamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CondicoesPagamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "osNumero": {
             "anyOf": [
               {
@@ -2431,14 +4450,24 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Valor"
+          },
+          "integrarFinanceiro": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integrarfinanceiro"
           }
         },
         "additionalProperties": false,
@@ -2447,6 +4476,16 @@
       },
       "ManutencaoIn": {
         "properties": {
+          "planoPagamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CondicoesPagamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "veiculoId": {
             "type": "string",
             "format": "uuid",
@@ -2522,11 +4561,15 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "title": "Valor"
+          },
+          "integrarFinanceiro": {
+            "type": "boolean",
+            "title": "Integrarfinanceiro",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -2543,6 +4586,16 @@
       },
       "MultaIn": {
         "properties": {
+          "planoPagamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CondicoesPagamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "veiculoId": {
             "type": "string",
             "format": "uuid",
@@ -2596,11 +4649,36 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "title": "Valororiginal"
+          },
+          "tipoLancamento": {
+            "type": "string",
+            "enum": [
+              "Multa",
+              "NIC"
+            ],
+            "title": "Tipolancamento",
+            "default": "Multa"
+          },
+          "multaOrigemId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multaorigemid"
+          },
+          "integrarFinanceiro": {
+            "type": "boolean",
+            "title": "Integrarfinanceiro",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -2615,6 +4693,16 @@
       },
       "MultaStatusIn": {
         "properties": {
+          "planoPagamento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CondicoesPagamento"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -2623,6 +4711,17 @@
               "Em Recurso"
             ],
             "title": "Status"
+          },
+          "integrarFinanceiro": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integrarfinanceiro"
           }
         },
         "additionalProperties": false,
@@ -2631,6 +4730,144 @@
           "status"
         ],
         "title": "MultaStatusIn"
+      },
+      "PagamentoPlanoIn": {
+        "properties": {
+          "forma": {
+            "type": "string",
+            "enum": [
+              "avista",
+              "parcelado"
+            ],
+            "title": "Forma",
+            "default": "avista"
+          },
+          "meioPagamento": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Meiopagamento",
+            "default": "Boleto"
+          },
+          "parcelas": {
+            "type": "integer",
+            "maximum": 48.0,
+            "minimum": 1.0,
+            "title": "Parcelas",
+            "default": 1
+          },
+          "vencimento": {
+            "type": "string",
+            "format": "date",
+            "title": "Vencimento"
+          },
+          "origem": {
+            "type": "string",
+            "enum": [
+              "abastecimento",
+              "manutencao",
+              "multa",
+              "pneu",
+              "conta",
+              "custoFixo"
+            ],
+            "title": "Origem"
+          },
+          "origemId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Origemid"
+          },
+          "pagas": {
+            "additionalProperties": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "object",
+            "maxProperties": 48,
+            "title": "Pagas"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "vencimento",
+          "origem",
+          "origemId"
+        ],
+        "title": "PagamentoPlanoIn"
+      },
+      "PlatformCompanyCreate": {
+        "properties": {
+          "nomeEmpresa": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 2,
+            "title": "Nomeempresa"
+          },
+          "cnpj": {
+            "type": "string",
+            "maxLength": 18,
+            "minLength": 14,
+            "title": "Cnpj"
+          },
+          "primeiroAdmin": {
+            "$ref": "#/components/schemas/FirstCompanyAdmin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nomeEmpresa",
+          "cnpj",
+          "primeiroAdmin"
+        ],
+        "title": "PlatformCompanyCreate"
+      },
+      "PlatformCompanyStatus": {
+        "properties": {
+          "ativo": {
+            "type": "boolean",
+            "title": "Ativo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ativo"
+        ],
+        "title": "PlatformCompanyStatus"
+      },
+      "PlatformLoginIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 5,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 12,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "totp": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Totp"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "totp"
+        ],
+        "title": "PlatformLoginIn"
       },
       "PneuIn": {
         "properties": {
@@ -2657,8 +4894,7 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "title": "Sulcomm",
@@ -2773,6 +5009,18 @@
             ],
             "title": "Kmrodados"
           },
+          "kmVeiculo": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kmveiculo"
+          },
           "localEstoque": {
             "type": "string",
             "title": "Localestoque",
@@ -2807,8 +5055,7 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "title": "Valor",
@@ -2826,6 +5073,56 @@
           "targetAction"
         ],
         "title": "PneuOperacao"
+      },
+      "PneuTrocaPosicoes": {
+        "properties": {
+          "pneuOrigemId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Pneuorigemid"
+          },
+          "pneuDestinoId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Pneudestinoid"
+          },
+          "kmRodadosOrigem": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Kmrodadosorigem",
+            "default": 0
+          },
+          "kmRodadosDestino": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Kmrodadosdestino",
+            "default": 0
+          },
+          "kmVeiculo": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kmveiculo"
+          },
+          "obs": {
+            "type": "string",
+            "title": "Obs",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pneuOrigemId",
+          "pneuDestinoId"
+        ],
+        "title": "PneuTrocaPosicoes"
       },
       "PneuUpdate": {
         "properties": {
@@ -2859,8 +5156,7 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               },
               {
                 "type": "null"
@@ -3004,6 +5300,19 @@
             "type": "boolean",
             "title": "Permitiripexterno",
             "default": false
+          },
+          "limiteVeiculos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limiteveiculos"
           }
         },
         "additionalProperties": false,
@@ -3067,6 +5376,19 @@
               }
             ],
             "title": "Permitiripexterno"
+          },
+          "limiteVeiculos": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limiteveiculos"
           }
         },
         "additionalProperties": false,
@@ -3288,6 +5610,194 @@
         "additionalProperties": false,
         "type": "object",
         "title": "VeiculoUpdate"
+      },
+      "ViagemEdit": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "origem": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origem"
+          },
+          "destino": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destino"
+          },
+          "kmInicial": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kminicial"
+          },
+          "kmFinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kmfinal"
+          },
+          "obs": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obs"
+          },
+          "itens": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ItemViagemIn"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Itens"
+          },
+          "despesas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DespesaManualIn"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Despesas"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ViagemEdit"
+      },
+      "ViagemIn": {
+        "properties": {
+          "numero": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Numero"
+          },
+          "veiculoId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Veiculoid"
+          },
+          "data": {
+            "type": "string",
+            "format": "date",
+            "title": "Data"
+          },
+          "origem": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Origem",
+            "default": ""
+          },
+          "destino": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Destino",
+            "default": ""
+          },
+          "kmInicial": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Kminicial"
+          },
+          "kmFinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kmfinal"
+          },
+          "obs": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Obs",
+            "default": ""
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ItemViagemIn"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Itens"
+          },
+          "despesas": {
+            "items": {
+              "$ref": "#/components/schemas/DespesaManualIn"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Despesas"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "numero",
+          "veiculoId",
+          "data",
+          "kmInicial"
+        ],
+        "title": "ViagemIn"
       }
     },
     "securitySchemes": {

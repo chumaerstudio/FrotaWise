@@ -129,6 +129,7 @@ export interface Pneu {
 }
 
 export interface Veiculo {
+  criadoPorId?: string | null;
   id: string;
   placa: string;
   uf: string;

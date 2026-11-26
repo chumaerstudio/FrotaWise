@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { httpClient } from '@/lib/http/client';
 import {
   ArrowRightLeft,
   Gauge,
@@ -18,8 +17,7 @@ import {
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { formatNumber, today } from '@/services/api';
 import { registrarMovimentacao } from '@/services/pneuKmService';
-import { api39Error } from '@/services/operacional39Service';
-import { getTireLimits, getTireKmStageStyle, getTireKmStageLegend } from '@/services/pneusService';
+import { getTireLimits, getTireRecapStyle, getTireRecapLegend } from '@/services/pneusService';
 import { getVehicleChassisSlots, normalizeChassisSlotCode } from '@/services/veiculosService';
 import { Btn, Chip, Empty, Field, FormActions, Modal, SectionHead, TireChip, cx } from '@/components/ui';
 import { RowActionsMenu } from '@/components/ui/RowActionsMenu';
@@ -43,7 +41,7 @@ export default function PneusHubPage() {
     startEditTire,
     handleDeleteTire,
     setTires, fuelings, maintenances, trips, syncOdometers, showToast,
-    liveMode, refreshLiveData,
+    liveMode, runLiveMutation,
   } = useEstoquePneus();
 
   const [tireHubSubTab, setTireHubSubTab] = useState<'chassis' | 'stock' | 'all'>('chassis');
@@ -53,7 +51,7 @@ export default function PneusHubPage() {
   const [zoomed, setZoomed] = useState(false);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [selectedSlotCode, setSelectedSlotCode] = useState('');
-  const [swapDraft, setSwapDraft] = useState<{ sourceId: string; targetId: string; kmSource: string; kmTarget: string; kmVehicle: string } | null>(null);
+  const [swapDraft, setSwapDraft] = useState<{ key: string; sourceId: string; targetId: string; kmSource: string; kmTarget: string; kmVehicle: string } | null>(null);
 
   const activeVehicle =
     vehicles.find((v) => v.id === selectedChassisVehicleId) || vehicles[0];
@@ -98,7 +96,7 @@ export default function PneusHubPage() {
       )?.kmVeiculo;
       return Math.max(0, Number(tire.kmTotal) || 0) + (lastReading == null ? 0 : Math.max(0, kmVehicle - Number(lastReading)));
     };
-    setSwapDraft({ sourceId, targetId, kmSource: String(projectedKm(source)), kmTarget: String(projectedKm(target)), kmVehicle: String(kmVehicle) });
+    setSwapDraft({ key: crypto.randomUUID(), sourceId, targetId, kmSource: String(projectedKm(source)), kmTarget: String(projectedKm(target)), kmVehicle: String(kmVehicle) });
   };
 
   const confirmTireSwap = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -118,23 +116,13 @@ export default function PneusHubPage() {
     const targetPos = normalizeChassisSlotCode(target.posicaoAtual, activeVehicle.categoria);
     const sourceDelta = kmSource - Number(source.kmTotal || 0); const targetDelta = kmTarget - Number(target.kmTotal || 0);
     if (liveMode) {
-      try {
-        await httpClient.post('/pneus/trocar-posicoes', {
-          pneuOrigemId: source.id,
-          pneuDestinoId: target.id,
-          kmRodadosOrigem: sourceDelta,
-          kmRodadosDestino: targetDelta,
-          kmVeiculo: kmVehicle,
-          obs: `Troca de posição ${sourcePos} ↔ ${targetPos}`,
-        }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
-        await refreshLiveData();
-        showToast(`Posições dos pneus #${source.fogo} e #${target.fogo} trocadas. KM atualizado.`);
-        setSwapDraft(null); setDraggedTireId(null); return;
-      } catch (error) {
-        await refreshLiveData().catch(() => undefined);
-        showToast(`Não foi possível concluir a troca de posições. ${api39Error(error)}`, 'error');
-        return;
-      }
+      const saved = await runLiveMutation('post', '/pneus/trocar-posicoes', {
+        pneuOrigemId: source.id, pneuDestinoId: target.id,
+        kmRodadosOrigem: sourceDelta, kmRodadosDestino: targetDelta,
+        kmVeiculo: kmVehicle, obs: `Troca de posição ${sourcePos} ↔ ${targetPos}`,
+      }, `Posições dos pneus #${source.fogo} e #${target.fogo} trocadas. KM atualizado.`, true, swapDraft.key);
+      if (saved) { setSwapDraft(null); setDraggedTireId(null); }
+      return;
     }
     const date = today();
 
@@ -379,8 +367,8 @@ export default function PneusHubPage() {
                 className="flex flex-wrap items-center gap-x-5 gap-y-2 ef-t12_5"
                 style={{ color: 'var(--ink2)' }}
               >
-                {getTireKmStageLegend().map((stage) => (
-                  <span key={stage.stage} className="flex items-center gap-2"><i className="ef-w3_5 ef-h3_5 rounded inline-block" style={{ background: stage.c }} />{stage.label}</span>
+                {getTireRecapLegend(tires).map((cycle) => (
+                  <span key={cycle.label} className="flex items-center gap-2"><i className="ef-w3_5 ef-h3_5 rounded inline-block" style={{ background: cycle.c }} />{cycle.label}</span>
                 ))}
               </div>
               <div
@@ -473,7 +461,7 @@ export default function PneusHubPage() {
                 </thead>
                 <tbody>
                   {totalStockTires.map((t) => {
-                    const st = getTireKmStageStyle(t, company);
+                    const st = getTireRecapStyle(t.recapagens);
                     return (
                       <tr key={t.id}>
                         <td>
@@ -492,9 +480,6 @@ export default function PneusHubPage() {
                         </td>
                         <td className="ef-t13">
                           <div>{st.label}</div>
-                          <div className="ef-t11_5" style={{ color: 'var(--mute)' }}>
-                            {t.recapagens ? `${t.recapagens} recapagem(ns)` : 'Sem recapagem'}
-                          </div>
                         </td>
                         <td className="mono text-center">{t.sulcoMm} mm</td>
                         <td className="mono ef-t12_5">{t.localEstoque || 'Almoxarifado'}</td>
@@ -570,7 +555,7 @@ export default function PneusHubPage() {
               <tbody>
                 {tires.map((t) => {
                   const veh = vehicles.find((v) => v.id === t.veiculoAtualId);
-                  const st = getTireKmStageStyle(t, company);
+                  const st = getTireRecapStyle(t.recapagens);
                   const lim = getTireLimits(t, company);
                   const pct = Math.min(
                     100,
@@ -603,7 +588,7 @@ export default function PneusHubPage() {
                           {t.classificacao}
                         </span>
                         <div className="ef-t11_5 mt-1" style={{ color: 'var(--mute)' }}>
-                          {st.label} · {t.recapagens ? `${t.recapagens} rec.` : '0 rec.'}
+                          {st.label}
                         </div>
                       </td>
                       <td className="mono ef-t12_5">

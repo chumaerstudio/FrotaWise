@@ -22,6 +22,9 @@ export default function VeiculosPage() {
     liveMode, runLiveMutation, pendingMutationCount,
   } = useEstoquePneus();
 
+  const userVehicleCount = usuario ? vehicles.filter(v => v.criadoPorId === usuario.id).length : 0;
+  const canEdit = liveMode && usuario?.capabilities.canManageVehicles;
+  const canDelete = liveMode && usuario?.papel === 'ADMIN';
   const [editing,setEditing] = useState<(typeof vehicles)[number] | null>(null);
   const [deleting, setDeleting] = useState<(typeof vehicles)[number] | null>(null);
   const [query, setQuery] = useState('');
@@ -31,7 +34,8 @@ export default function VeiculosPage() {
     const matches = `${v.placa} ${v.modelo} ${v.categoria}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'));
     return matches && (statusFilter === 'todos' || v.status === statusFilter);
   }).sort((a,b) => a.placa.localeCompare(b.placa)), [vehicles, query, statusFilter]);
-  const visible = filtered.slice(page * 12, page * 12 + 12);
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 12) - 1));
+  const visible = filtered.slice(currentPage * 12, currentPage * 12 + 12);
   const resetPage = () => setPage(0);
   const saveVehicle = async (e: React.FormEvent) => {
     e.preventDefault(); if (!editing) return;
@@ -63,8 +67,8 @@ export default function VeiculosPage() {
       <SectionHead title="Frota de veículos" sub="Consulte um veículo pela placa para acessar sua ficha operacional.">
         <div className="flex flex-wrap items-center gap-2">
           {usuario?.limiteVeiculos != null && (
-            <Chip tone={(usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos ? 'red' : 'blue'}>
-              Cota do acesso: {usuario.veiculosCadastrados ?? 0}/{usuario.limiteVeiculos}
+            <Chip tone={userVehicleCount >= usuario.limiteVeiculos ? 'red' : 'blue'}>
+              Cota do acesso: {userVehicleCount}/{usuario.limiteVeiculos}
             </Chip>
           )}
           <Chip tone="gray">{vehicles.length} equipamentos</Chip>
@@ -135,7 +139,7 @@ export default function VeiculosPage() {
                       >
                         Ver no chassi <ChevronRight size={14} />
                       </Btn>
-                      <details className="ef-row-menu"><summary aria-label={`Mais ações do veículo ${v.placa}`}><MoreHorizontal size={19}/></summary><div className="ef-row-menu-pop"><button type="button" onClick={() => setDetailVehicleId(v.id)}>Abrir detalhes</button>{liveMode && <><button type="button" onClick={() => setEditing({...v})}>Editar veículo</button><button type="button" className="ef-danger-text" onClick={() => setDeleting(v)}>Excluir veículo</button></>}</div></details>
+                      <details className="ef-row-menu"><summary aria-label={`Mais ações do veículo ${v.placa}`}><MoreHorizontal size={19}/></summary><div className="ef-row-menu-pop"><button type="button" onClick={() => setDetailVehicleId(v.id)}>Abrir detalhes</button>{canEdit && <button type="button" onClick={() => setEditing({...v})}>Editar veículo</button>}{canDelete && <button type="button" className="ef-danger-text" onClick={() => setDeleting(v)}>Excluir veículo</button>}</div></details>
                       </div>
                     </td>
                   </tr>
@@ -146,16 +150,16 @@ export default function VeiculosPage() {
         </div>
         <div className="ef-mobile-vehicle-list">{visible.map(v => {
           const mounted = tires.filter(t => t.veiculoAtualId === v.id).length;
-          return <article key={v.id} className="ef-mobile-vehicle-card"><div className="ef-mobile-vehicle-head"><button type="button" className="ef-plate-link" onClick={() => setDetailVehicleId(v.id)}><Plate v={v}/></button><Chip tone={v.status === 'Operando' ? 'teal' : 'amber'}>{v.status}</Chip></div><h3>{v.modelo}</h3><p>{v.categoria}</p><div className="ef-mobile-vehicle-facts"><span><small>Hodômetro</small><b>{formatNumber(v.kmAtual)} km</b></span><span><small>Pneus montados</small><b>{mounted} pneus</b></span><span><small>Eixos</small><b>{v.eixos}</b></span></div><div className="ef-mobile-vehicle-actions"><Btn sm onClick={() => setDetailVehicleId(v.id)}>Abrir ficha</Btn><Btn sm v="primary" onClick={() => { setSelectedChassisVehicleId(v.id); router.push('/pneus'); }}>Ver chassi</Btn>{liveMode && <Btn sm onClick={() => setEditing({...v})}>Editar</Btn>}</div></article>;
+          return <article key={v.id} className="ef-mobile-vehicle-card"><div className="ef-mobile-vehicle-head"><button type="button" className="ef-plate-link" onClick={() => setDetailVehicleId(v.id)}><Plate v={v}/></button><Chip tone={v.status === 'Operando' ? 'teal' : 'amber'}>{v.status}</Chip></div><h3>{v.modelo}</h3><p>{v.categoria}</p><div className="ef-mobile-vehicle-facts"><span><small>Hodômetro</small><b>{formatNumber(v.kmAtual)} km</b></span><span><small>Pneus montados</small><b>{mounted} pneus</b></span><span><small>Eixos</small><b>{v.eixos}</b></span></div><div className="ef-mobile-vehicle-actions"><Btn sm onClick={() => setDetailVehicleId(v.id)}>Abrir ficha</Btn><Btn sm v="primary" onClick={() => { setSelectedChassisVehicleId(v.id); router.push('/pneus'); }}>Ver chassi</Btn>{canEdit && <Btn sm onClick={() => setEditing({...v})}>Editar</Btn>}{canDelete && <Btn sm onClick={() => setDeleting(v)}>Excluir</Btn>}</div></article>;
         })}</div>
         </>
       )}
-      {filtered.length > 12 && <div className="ef-pagination"><span>Exibindo {page * 12 + 1}–{Math.min((page + 1) * 12, filtered.length)} de {filtered.length}</span><div><Btn sm disabled={page === 0} onClick={() => setPage(p => Math.max(0, p-1))}>Anterior</Btn><Btn sm disabled={(page+1)*12 >= filtered.length} onClick={() => setPage(p => p+1)}>Próxima</Btn></div></div>}
+      {filtered.length > 12 && <div className="ef-pagination"><span>Exibindo {currentPage * 12 + 1}–{Math.min((currentPage + 1) * 12, filtered.length)} de {filtered.length}</span><div><Btn sm disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Anterior</Btn><Btn sm disabled={(currentPage+1)*12 >= filtered.length} onClick={() => setPage(currentPage + 1)}>Próxima</Btn></div></div>}
       </div>
       {deleting && (
         <ConfirmDialog
           title={`Excluir veículo ${deleting.placa}?`}
-          description="O veículo será excluído se não houver registros que impeçam a remoção. Revise essa ação antes de continuar."
+          description="A placa e o modelo ficam no histórico dos pneus. Pneus montados, viagens e lançamentos vinculados impedem a exclusão."
           confirmLabel="Excluir veículo"
           onCancel={() => setDeleting(null)}
           onConfirm={() => runLiveMutation('delete', `/veiculos/${deleting.id}`, undefined, 'Veículo excluído.')}

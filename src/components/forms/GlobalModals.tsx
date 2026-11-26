@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { httpClient } from '@/lib/http/client';
-import { api39Error, savePlan } from '@/services/operacional39Service';
 import { Disc, History, X } from 'lucide-react';
 import { useEstoquePneus } from '@/hooks/useFrotaWiseStore';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,7 +14,7 @@ import {
   formatNumber,
   today,
 } from '@/services/api';
-import { getTireLimits, getTireKmStageStyle } from '@/services/pneusService';
+import { getTireLimits, getTireRecapStyle } from '@/services/pneusService';
 import {
   aplicarAjusteKm,
   calcularKmMovimentacao,
@@ -116,10 +114,11 @@ export const GlobalModals: React.FC = () => {
     editingFuelId,
     setEditingFuelId,
     syncOdometers,
-    liveMode, runLiveMutation, refreshLiveData,
+    liveMode, runLiveMutation,
   } = useEstoquePneus();
 
   // Helper único; dados só são atualizados após confirmação do FastAPI.
+  const userVehicleCount = usuario ? vehicles.filter(v => v.criadoPorId === usuario.id).length : 0;
   const awaitLive = runLiveMutation;
   const [actionKmInput, setActionKmInput] = useState('');
   const [actionObsInput, setActionObsInput] = useState('');
@@ -387,52 +386,12 @@ export const GlobalModals: React.FC = () => {
     return true;
   };
 
-  const liveMutationWithPlan = async (
-    method: 'post' | 'patch', path: string, payload: Record<string, unknown>,
-    origem: PagamentoPlano['origem'],
-    form: { integrarFinanceiro: boolean; pgForma: 'avista' | 'parcelado'; pgMeio?: string; pgParcelas: string; pgVenc: string },
-    data: string, success: string, existingId?: string
-  ): Promise<boolean> => {
-    let responseData: any;
-    try {
-      const response = await httpClient.request({
-        method, url: path, data: payload,
-        headers: method === 'post' ? { 'Idempotency-Key': crypto.randomUUID() } : undefined,
-        timeout: 30000,
-      });
-      responseData = response.data;
-    } catch (error) {
-      showToast(api39Error(error), 'error');
-      return false;
-    }
-    let notice = success;
-    let tone: 'success' | 'warning' | 'error' = 'success';
-    if (form.integrarFinanceiro) {
-      const origemId = existingId || String(responseData?.id ?? responseData?.data?.id ?? responseData?.item?.id ?? '');
-      if (!origemId) {
-        notice = 'O registro foi salvo, mas o servidor não retornou o ID para vinculá-lo ao Financeiro.';
-        tone = 'warning';
-      } else {
-        try {
-          const parcelas = form.pgForma === 'parcelado' ? Math.round(Number(form.pgParcelas)) : 1;
-          await savePlan({ origem, origemId, forma: form.pgForma, meioPagamento: form.pgMeio || 'Boleto', parcelas, vencimento: form.pgVenc || data, pagas: {} });
-        } catch (error) {
-          notice = `O registro foi salvo, mas não foi possível criar o plano no Financeiro: ${api39Error(error)}`;
-          tone = 'error';
-        }
-      }
-    } else if (existingId && pagamentos.some((plan) => plan.origem === origem && plan.origemId === existingId)) {
-      try {
-        await httpClient.delete(`/financeiro/pagamentos/${encodeURIComponent(origem)}/${encodeURIComponent(existingId)}`, { timeout: 30000 });
-      } catch (error) {
-        notice = `Registro atualizado, mas não foi possível remover o plano financeiro anterior: ${api39Error(error)}`;
-        tone = 'warning';
-      }
-    }
-    try { await refreshLiveData(); } catch { /* Registro principal já foi confirmado. */ }
-    showToast(notice, tone);
-    return true;
-  };
+  const paymentTerms = (form: typeof maintenanceForm | typeof fineForm) => form.integrarFinanceiro ? {
+    forma: form.pgForma,
+    meioPagamento: form.pgMeio || 'Boleto',
+    parcelas: form.pgForma === 'parcelado' ? Number(form.pgParcelas) : 1,
+    vencimento: form.pgVenc || form.data,
+  } : null;
 
   const sufixoKm = (mud: string[]) =>
     mud.length ? ` Hodômetro ajustado (${mud.join('; ')}).` : '';
@@ -513,6 +472,10 @@ export const GlobalModals: React.FC = () => {
     if (!tireActionModal || !info) return;
     const { tire, targetAction, targetVehicleId, targetSlotCode } = tireActionModal;
     const { tireNow, kmInicial, kmFinal, calc, veiculo } = info;
+    if (targetAction === 'Recapar' && tireNow.classificacao === 'Recapar' && tireNow.reformas?.length) {
+      showToast('Conclua a recapagem em andamento antes de enviar o pneu novamente.', 'warning');
+      return;
+    }
     if (!calc.ok) {
       showToast(calc.erro, 'error');
       return;
@@ -840,8 +803,9 @@ export const GlobalModals: React.FC = () => {
         fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
         data: maintenanceForm.data, valor: Number(maintenanceForm.valor),
         integrarFinanceiro: !!maintenanceForm.integrarFinanceiro,
+        planoPagamento: paymentTerms(maintenanceForm),
       };
-      void liveMutationWithPlan('post', '/manutencoes', item, 'manutencao', maintenanceForm, maintenanceForm.data, 'Manutenção registrada.')
+      void awaitLive('post', '/manutencoes', item, 'Manutenção registrada.', true)
         .then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
@@ -900,14 +864,15 @@ export const GlobalModals: React.FC = () => {
         showToast('Após o lançamento, KM, data e veículo não podem ser alterados. Solicite uma conciliação administrativa.', 'warning');
         return;
       }
-      void liveMutationWithPlan('patch', `/manutencoes/${old.id}`, {
+      void awaitLive('patch', `/manutencoes/${old.id}`, {
         osNumero: maintenanceForm.osNumero, tipo: maintenanceForm.tipo,
         categoria: maintenanceForm.categoria, peca: maintenanceForm.peca,
         descricao: maintenanceForm.descricao.trim(),
         fornecedor: maintenanceForm.fornecedor.trim() || 'Oficina Credenciada',
         valor: Number(maintenanceForm.valor),
         integrarFinanceiro: !!maintenanceForm.integrarFinanceiro,
-      }, 'manutencao', maintenanceForm, old.data, 'Manutenção atualizada.', old.id).then(ok => {if (ok) closeMaintenanceModal();});
+        planoPagamento: paymentTerms(maintenanceForm),
+      }, 'Manutenção atualizada.').then(ok => {if (ok) closeMaintenanceModal();});
       return;
     }
     const old = maintenances.find((m) => m.id === editingMaintId);
@@ -1144,17 +1109,15 @@ export const GlobalModals: React.FC = () => {
       if (nic && (!original || original.veiculoId !== fineForm.veiculoId)) {
         showToast('Selecione uma multa original do mesmo veículo para criar a NIC.', 'error'); return;
       }
-      if (nic) {
-        showToast('O contrato atual do servidor não permite criar NICs por este formulário. Use o lançamento de multa disponível no backend.', 'error');
-        return;
-      }
-      void liveMutationWithPlan('post', '/multas', {
+      void awaitLive('post', '/multas', {
+        tipoLancamento: fineForm.tipoLancamento, multaOrigemId: original?.id ?? null,
         veiculoId: fineForm.veiculoId, ait: fineForm.ait.trim(), motivo: fineForm.motivo.trim(),
         identificado: fineForm.identificado,
         motorista: fineForm.motorista || 'Não informado', status: fineForm.status,
         data: fineForm.data, pontos: Number(fineForm.pontos), valorOriginal: Number(fineForm.valor),
         integrarFinanceiro: !!fineForm.integrarFinanceiro,
-      }, 'multa', fineForm, fineForm.data, 'Multa registrada.')
+        planoPagamento: paymentTerms(fineForm),
+      }, 'Multa registrada.', true)
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
@@ -1236,10 +1199,11 @@ export const GlobalModals: React.FC = () => {
       if (old.veiculoId !== fineForm.veiculoId || old.motivo !== fineForm.motivo.trim() || old.data !== fineForm.data || (old.valorOriginal ?? old.valor) !== Number(fineForm.valor) || old.ait !== fineForm.ait.trim() || old.identificado !== fineForm.identificado || (old.motorista || '') !== (fineForm.identificado ? fineForm.motorista || '' : 'Não identificado') || old.pontos !== (fineForm.identificado ? Number(fineForm.pontos) : 0)) {
         showToast('Somente a situação da multa pode ser alterada por aqui. Os demais dados permanecerão iguais.', 'warning'); return;
       }
-      void liveMutationWithPlan('patch', `/multas/${old.id}/status`, {
+      void awaitLive('patch', `/multas/${old.id}/status`, {
         status: fineForm.status,
         integrarFinanceiro: !!fineForm.integrarFinanceiro,
-      }, 'multa', fineForm, old.data, 'Status da multa atualizado.', old.id)
+        planoPagamento: paymentTerms(fineForm),
+      }, 'Status da multa atualizado.')
         .then(ok => {if (ok) closeFineModal();});
       return;
     }
@@ -1397,7 +1361,7 @@ export const GlobalModals: React.FC = () => {
             ) : (
               <div className="px-5">
                 {mountedTires.map((t, i) => {
-                  const st = getTireKmStageStyle(t, company);
+                  const st = getTireRecapStyle(t.recapagens);
                   const lim = getTireLimits(t, company);
                   const pct = Math.min(100, ((Number(t.kmTotal) || 0) / (lim.kmSucatear || 1)) * 100);
                   const barC =
@@ -1692,7 +1656,7 @@ export const GlobalModals: React.FC = () => {
           }}
         >
           <div className="flex items-center gap-2 mb-3 ef-t13">
-            <span className="inline-flex items-center rounded-lg px-2.5 py-1 ef-t12 font-semibold text-white" style={{ background: getTireKmStageStyle(hTire, company).c }}>{hTire.classificacao}</span>
+            <span className="inline-flex items-center rounded-lg px-2.5 py-1 ef-t12 font-semibold text-white" style={{ background: getTireRecapStyle(hTire.recapagens).c }}>{hTire.classificacao} · {getTireRecapStyle(hTire.recapagens).label}</span>
             <span style={{ color: 'var(--mute)' }}>
               KM acumulado do pneu = soma das movimentações válidas abaixo
             </span>
@@ -1831,13 +1795,13 @@ export const GlobalModals: React.FC = () => {
               <div
                 className="ef-t12_5 px-3 py-2 rounded-lg"
                 style={{
-                  background: (usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos ? 'var(--red-soft)' : 'var(--blue-soft)',
-                  color: (usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos ? 'var(--red-ink)' : 'var(--blue-ink)',
+                  background: userVehicleCount >= usuario.limiteVeiculos ? 'var(--red-soft)' : 'var(--blue-soft)',
+                  color: userVehicleCount >= usuario.limiteVeiculos ? 'var(--red-ink)' : 'var(--blue-ink)',
                 }}
               >
-                {(usuario.veiculosCadastrados ?? 0) >= usuario.limiteVeiculos
-                  ? `Limite de cadastro atingido para este acesso (${usuario.veiculosCadastrados ?? 0}/${usuario.limiteVeiculos} veículos).`
-                  : `Cota deste acesso: ${usuario.veiculosCadastrados ?? 0} de ${usuario.limiteVeiculos} veículos cadastrados.`}
+                {userVehicleCount >= usuario.limiteVeiculos
+                  ? `Limite de cadastro atingido para este acesso (${userVehicleCount}/${usuario.limiteVeiculos} veículos).`
+                  : `Cota deste acesso: ${userVehicleCount} de ${usuario.limiteVeiculos} veículos cadastrados.`}
               </div>
             )}
             <div className="grid grid-cols-3 gap-3">

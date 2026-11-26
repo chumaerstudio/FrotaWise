@@ -31,6 +31,17 @@ test('Contrato: 47 métodos reais da API existem no OpenAPI do FastAPI',()=>{
  assert.equal(tests.length,47);
  for(const [m,p] of tests)assert.ok(backend(m,p),`${m.toUpperCase()} /v1${p} não encontrado`);
 });
+test('Contrato de recapagem, troca de pneus e parcelas do lançamento', () => {
+  assert.ok(backend('post', '/pneus/trocar-posicoes'));
+  assert.ok(backend('put', '/financeiro/pagamentos'));
+  for (const schema of ['ManutencaoIn', 'ManutencaoEdit', 'MultaIn', 'MultaStatusIn']) {
+    const fields = spec.components.schemas[schema].properties;
+    assert.ok(fields.planoPagamento && fields.integrarFinanceiro, schema);
+  }
+  const terms = spec.components.schemas.CondicoesPagamento.properties;
+  assert.ok(terms.forma && terms.meioPagamento && terms.parcelas && terms.vencimento);
+});
+
 test('Login mapeia usuario+empresa sem retornar JWT ao navegador',()=>{
  const {mapUserFromBackend}=compileTypescript('src/lib/server/user.ts');
  const u=mapUserFromBackend({id:'a',nome:'Teste',email:'test@example.test',role:'ADMIN',empresaId:'e',nomeEmpresa:'FrotaWise Testes'});

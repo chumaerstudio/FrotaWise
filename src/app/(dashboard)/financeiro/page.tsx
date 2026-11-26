@@ -389,6 +389,7 @@ export default function FinanceiroPage() {
     hoje.slice(0, 7),
     ...finItems.map((item) => String(item.vencimento || '').slice(0, 7)).filter(isYM),
     ...finItems.filter((item) => item.pagoEm).map((item) => String(item.pagoEm || '').slice(0, 7)).filter(isYM),
+    ...trips.flatMap(trip => trip.despesas.filter(d => d.origem === 'manual').map(d => d.data.slice(0, 7))).filter(isYM),
     ...trips.map((trip) => String(trip.data || '').slice(0, 7)).filter(isYM),
   ])].sort().reverse();
   const noPeriodo = (iso: string) => periodo === 'todos' || String(iso).slice(0, 7) === periodo;

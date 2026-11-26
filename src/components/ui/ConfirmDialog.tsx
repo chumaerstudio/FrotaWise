@@ -20,8 +20,7 @@ export function ConfirmDialog({ title, description, confirmLabel = 'Excluir', va
     if (pending) return;
     setPending(true);
     try {
-      await onConfirm();
-      onCancel();
+      if (await onConfirm() !== false) onCancel();
     } finally {
       setPending(false);
     }

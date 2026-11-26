@@ -5,6 +5,7 @@ import {
   daysBetween,
   splitInstallments,
 } from '@/services/financeiroLocal';
+import { competenciasDoCusto } from '@/services/custosFixosService';
 import type {
   Abastecimento,
   ContaPagar,
@@ -16,6 +17,11 @@ import type {
 } from '@/types/frotawise';
 
 describe('Financeiro local — atualização 3.9.0', () => {
+  it('encerra um custo inativo na última competência da vigência', () => {
+    expect(competenciasDoCusto({ inicio: '2026-02', fim: '2026-03', ativo: false }, '2026-11-25'))
+      .toEqual(['2026-02', '2026-03']);
+  });
+
   it('divide parcelas em centavos sem perder o valor total', () => {
     const parcelas = splitInstallments(100, 3);
     expect(parcelas).toEqual([33.33, 33.33, 33.34]);

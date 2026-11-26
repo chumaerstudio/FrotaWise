@@ -28,6 +28,22 @@ function records(data: unknown): Record<string, unknown>[] {
   return data as Record<string, unknown>[];
 }
 
+export async function readAllPages(path: string, pageSize: number) {
+  const rows: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (let offset = 0; ; offset += pageSize) {
+    const { data } = await httpClient.get(path, { params: { offset }, timeout: 30000 });
+    const page = records(data);
+    for (const row of page) {
+      const id = String(row.id);
+      if (seen.has(id)) throw new Error('A lista mudou durante a consulta. Atualize os dados.');
+      seen.add(id);
+      rows.push(row);
+    }
+    if (page.length < pageSize) return rows;
+  }
+}
+
 export function mapTrips(data: unknown): Viagem[] {
   return records(data).map((t) => ({
     id: String(t.id), numero: Number(t.numero), veiculoId: String(t.veiculoId),

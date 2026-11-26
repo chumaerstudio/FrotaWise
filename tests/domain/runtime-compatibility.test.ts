@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeStoredValue } from '@/lib/storage';
-import { INITIAL_COMPANY, INITIAL_TIRES, getTireLimits } from '@/services/pneusService';
+import { INITIAL_COMPANY, INITIAL_TIRES, getTireRecapStyle, getTireRecapLegend, getTireLimits } from '@/services/pneusService';
 import {
   INITIAL_FINES,
   INITIAL_MAINTENANCES,
@@ -38,4 +38,13 @@ describe('Regressão de inicialização e compatibilidade do FrotaWise', () => {
     expect(computeFuelMedias(fuelings).a2).toBe(10);
     expect(computeFuelMediaDetails(fuelings).a2).toMatchObject({ media: 10, dist: 500, litros: 50, kmAnterior: 1000 });
   });
+});
+
+it('mantém a cor e o rótulo do mesmo ciclo no chassi e na legenda', () => {
+  const cycles = [0, 1, 2, 3, 4, 5];
+  const tires = cycles.map(recapagens => ({ ...INITIAL_TIRES[0], recapagens, kmTotal: 80000 }));
+  const legend = getTireRecapLegend(tires);
+  expect(legend).toEqual(cycles.map(getTireRecapStyle));
+  expect(new Set(legend.map(entry => entry.c)).size).toBe(cycles.length);
+  expect(legend.map(entry => entry.label)).toEqual(['Novo', ...cycles.slice(1).map(n => `${n}ª recapagem`)]);
 });

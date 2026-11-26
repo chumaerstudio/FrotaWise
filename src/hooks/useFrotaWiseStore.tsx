@@ -38,7 +38,7 @@ import { normalizarCustosFixos } from '@/services/custosFixosService';
 import { CATEGORIAS_MANUTENCAO, KM_AVISO_PREVENTIVA, STORAGE_KEYS, formatCurrency, formatDec, formatNumber, today } from '@/services/api';
 import { normalizeStoredValue } from '@/lib/storage';
 import { httpClient } from '@/lib/http/client';
-import { mapAccounts, mapCosts, mapPlans, mapTrips } from '@/services/operacional39Service';
+import { readAllPages, mapAccounts, mapCosts, mapPlans, mapTrips } from '@/services/operacional39Service';
 import { getClientEnv } from '@/config/env';
 import { friendlyError } from '@/lib/errors';
 
@@ -302,16 +302,16 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
           maintenances: Manutencao[]; fines: Multa[]; fuelings: Abastecimento[];
           preventiveList: AlertaPreventivaItem[]; tireAlerts: AlertaRemold[];
         }>('/bootstrap', { timeout: 30000 }),
-        httpClient.get('/viagens', { timeout: 30000 }),
-        httpClient.get('/custos-fixos', { timeout: 30000 }),
-        httpClient.get('/financeiro/contas', { timeout: 30000 }),
-        httpClient.get('/financeiro/pagamentos', { timeout: 30000 }),
+        readAllPages('/viagens', 500),
+        readAllPages('/custos-fixos', 500),
+        readAllPages('/financeiro/contas', 500),
+        readAllPages('/financeiro/pagamentos', 1000),
       ]);
       const d = bootstrap.data;
-      const nextTrips = mapTrips(tripsResp.data);
-      const nextCosts = mapCosts(costsResp.data);
-      const nextAccounts = mapAccounts(accountsResp.data);
-      const nextPlans = mapPlans(plansResp.data);
+      const nextTrips = mapTrips(tripsResp);
+      const nextCosts = mapCosts(costsResp);
+      const nextAccounts = mapAccounts(accountsResp);
+      const nextPlans = mapPlans(plansResp);
       // Resposta de uma sessão anterior nunca pode sobrescrever dados da atual.
       if (generation !== liveRefreshGeneration.current) return;
       setCompany(d.company); setVehicles(d.vehicles); setTires(d.tires);
@@ -798,7 +798,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
               ...t,
               recapagens: Math.max(
                 Number(t.recapagens) || 0,
-                Math.max(0, ...(t.reformas || []).map((r) => Number(r.ciclo) || 0)) || (Number(t.recapagens) || 0) + 1
+                Math.max(0, ...(t.reformas || []).map((r) => Number(r.ciclo) || 0))
               ),
               sulcoMm: 14.0,
               classificacao: 'Estocar',
@@ -809,7 +809,7 @@ export function FrotaWiseProvider({ children }: { children: React.ReactNode }) {
           : t
       )
     );
-    showToast(`Pneu #${tire.fogo} retornou da recapagem (+1 ciclo) para o estoque!`);
+    showToast(`Pneu #${tire.fogo} retornou da recapagem para o estoque!`);
   };
 
   const handleExportBackup = () => {

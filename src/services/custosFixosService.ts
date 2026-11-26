@@ -46,7 +46,7 @@ export function competenciasDoCusto(
   const atual = ymAtual(hojeIso);
   const limiteFuturo = addMesesYM(atual, c.ativo ? MESES_A_FRENTE_FINANCEIRO : 0);
   const fim = c.fim && /^\d{4}-\d{2}$/.test(c.fim) ? c.fim : null;
-  const limite = c.ativo && fim ? fim : limiteFuturo;
+  const limite = fim && (c.ativo || fim < limiteFuturo) ? fim : limiteFuturo;
   const out: string[] = [];
   for (let ym = inicio, guard = 0; ym <= limite && guard < 600; ym = addMesesYM(ym, 1), guard++) out.push(ym);
   return out;
